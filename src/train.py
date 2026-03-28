@@ -60,9 +60,9 @@ def load_model_and_tokenizer(device: str):
     print(f"  → Modelo HF: {model_id}")
 
     if device == "cuda":
-        # Limita a VRAM usada — projetado para GPUs de 8 GB
-        # Overflow vai para RAM via CPU offload automático do accelerate
-        max_memory = {0: CUDA_MAX_MEMORY, "cpu": "20GiB"}
+        # device_map={"": 0} força todo o modelo na GPU 0.
+        # bitsandbytes 4-bit não suporta offload para CPU/disco — usar "auto"
+        # com max_memory faz o accelerate tentar offload e causa ValueError.
         try:
             from transformers import BitsAndBytesConfig
             bnb = BitsAndBytesConfig(
@@ -73,17 +73,15 @@ def load_model_and_tokenizer(device: str):
             )
             load_kwargs.update({
                 "quantization_config": bnb,
-                "device_map": "auto",
-                "max_memory": max_memory,
+                "device_map": {"": 0},
             })
-            print(f"  → Modo: QLoRA 4-bit (CUDA, VRAM cap: {CUDA_MAX_MEMORY})")
+            print("  → Modo: QLoRA 4-bit (CUDA, tudo na GPU 0)")
         except ImportError:
             load_kwargs.update({
                 "torch_dtype": torch.float16,
-                "device_map": "auto",
-                "max_memory": max_memory,
+                "device_map": {"": 0},
             })
-            print(f"  → Modo: float16 (CUDA, VRAM cap: {CUDA_MAX_MEMORY})")
+            print("  → Modo: float16 (CUDA, tudo na GPU 0)")
 
     elif device == "mps":
         # QLoRA 4-bit limita o modelo a ~4.5 GB de memória unificada.
