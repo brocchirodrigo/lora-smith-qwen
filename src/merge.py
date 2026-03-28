@@ -20,8 +20,6 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from src.config.settings import settings
 
-# O modelo 2B em bfloat16 completo ocupa ~4 GB.
-# Verificamos RAM disponível (não total) — outros processos consomem memória.
 _MIN_RAM_GB = 6
 
 LORA_HF_DIR  = Path("models/lora-hf")
@@ -50,11 +48,12 @@ def main() -> None:
         raise ValueError("HF_PUSH_REPO não definido no .env (ex: seu-usuario/nome-do-modelo)")
 
     print(f"\n→ Carregando modelo base: {settings.model_hf_id}")
-    # Merge precisa de pesos em bfloat16 completos — sem quantização 4-bit
+    
     model = AutoModelForCausalLM.from_pretrained(
         settings.model_hf_id,
         torch_dtype=torch.bfloat16,
         low_cpu_mem_usage=True,
+        device_map="cpu",
     )
     tokenizer = AutoTokenizer.from_pretrained(settings.model_hf_id)
 

@@ -128,8 +128,14 @@ def main() -> None:
     valid_dataset = load_jsonl(VALID_FILE) if VALID_FILE.exists() else None
     print(f"  Treino: {len(train_dataset)} | Validação: {len(valid_dataset) if valid_dataset else 0}")
 
-    use_bf16 = device in ("cuda", "mps")
-    grad_accum = 8  # batch efetivo = 8; CUDA e MPS unificados
+    if device == "cuda":
+        major, _ = torch.cuda.get_device_capability()
+        use_bf16 = major >= 8
+    elif device == "mps":
+        use_bf16 = True
+    else:
+        use_bf16 = False
+    grad_accum = 8
     gc_kwargs = {"use_reentrant": False} if device in ("cuda", "mps") else {}
 
     training_args = SFTConfig(

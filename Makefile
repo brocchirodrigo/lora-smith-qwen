@@ -24,9 +24,9 @@ export
 
 CPU_THREADS   ?= 6
 TRAIN_ITERS   ?= 500
-MODEL_HF_ID   ?= Qwen/Qwen3.5-9B
-MODEL_REPO_ID ?= unsloth/Qwen3.5-9B-GGUF
-MODEL_FILENAME ?= Qwen3.5-9B-Q4_K_M.gguf
+MODEL_HF_ID   ?= Qwen/Qwen3.5-2B
+MODEL_REPO_ID ?= unsloth/Qwen3.5-2B-GGUF
+MODEL_FILENAME ?= Qwen3.5-2B-Q4_K_M.gguf
 
 MODEL_MERGED := models/merged
 HF_PUSH_REPO ?=
@@ -70,6 +70,9 @@ setup:
 	@echo "→ Criando ambiente virtual e instalando dependências Python com uv..."
 	@uv venv --quiet --seed 2>/dev/null || true
 	@uv pip install -e . --quiet
+
+	@echo "→ Pré-compilando system prompt..."
+	@uv run python -c "import yaml; open('prompts/system_prompt.txt', 'w').write(yaml.safe_load(open('prompts/prompts.yaml'))['system'].strip())"
 
 	@echo "→ Clonando llama.cpp (se necessário)..."
 	@if [ ! -d "$(LLAMA_DIR)" ]; then \
@@ -133,14 +136,15 @@ push-hf: $(MODEL_LORA_HF)/adapter_model.safetensors
 # ─── Inferência interativa ────────────────────────────────────────────────────
 run: $(MODEL_GGUF) $(MODEL_LORA)
 	@echo "→ Iniciando chat interativo (llama-cli + LoRA GGUF)..."
-	@$(LLAMA_BIN)/llama-cli \
+	@SYS=$$(cat prompts/system_prompt.txt) && \
+	$(LLAMA_BIN)/llama-cli \
 		--model $(MODEL_GGUF) \
 		--lora $(MODEL_LORA) \
 		--interactive \
 		--color \
 		-c 4096 \
 		-t $(CPU_THREADS) \
-		-sys "$(shell uv run python -c "import yaml; print(yaml.safe_load(open('prompts/prompts.yaml'))['system'].strip())")"
+		-sys "$$SYS"
 
 # ─── Limpeza ──────────────────────────────────────────────────────────────────
 clean:

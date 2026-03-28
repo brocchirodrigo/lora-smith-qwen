@@ -5,10 +5,6 @@ from src.services.html_cleaner import HTMLCleaner
 _IM_START = "<|im_start|>"
 _IM_END = "<|im_end|>"
 
-# Cada tupla é (fn_pergunta, fn_resposta).
-# As variantes diretas (0–2) respondem com o conteúdo puro.
-# As variantes vagas (3–4) prefixam a resposta com "Pode ser relacionado a [título]."
-# para treinar o padrão cooperativo de sugestão por similaridade.
 _VARIANTS: list[tuple] = [
     (
         lambda t: t,
