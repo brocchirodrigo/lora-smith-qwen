@@ -20,9 +20,9 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from src.config.settings import settings
 
-# O modelo 9B em bfloat16 completo ocupa ~18 GB.
+# O modelo 2B em bfloat16 completo ocupa ~4 GB.
 # Com swap/disco o processo se torna inviável — exige RAM física suficiente.
-_MIN_RAM_GB = 16
+_MIN_RAM_GB = 6
 
 LORA_HF_DIR  = Path("models/lora-hf")
 MERGED_DIR   = Path("models/merged")

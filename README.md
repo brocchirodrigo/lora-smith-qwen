@@ -1,6 +1,6 @@
 # lora-smith-qwen
 
-Pipeline genérico de fine-tuning LoRA para o modelo **Qwen3.5-9B** a partir de artigos de qualquer **help center WordPress**.
+Pipeline genérico de fine-tuning LoRA para o modelo **Qwen3.5-2B** a partir de artigos de qualquer **help center WordPress**.
 
 Treino via Python (PEFT/TRL) em qualquer ambiente — CUDA, Apple Silicon ou CPU. Inferência via **llama.cpp** com GGUF, agnóstico de plataforma.
 
@@ -41,21 +41,21 @@ Cada etapa depende da anterior. As etapas 1–3 só precisam ser refeitas se o a
 | Ambiente | RAM mínima | Observações |
 |---|---|---|
 | Apple Silicon (M1/M2/M3) | 8 GB | Memória unificada. Treino em QLoRA 4-bit via MPS |
-| Linux + CUDA | 8 GB VRAM | QLoRA 4-bit via bitsandbytes |
+| Linux + CUDA | 4 GB VRAM | QLoRA 4-bit via bitsandbytes |
 | Linux CPU | 24 GB RAM | Treino em fp32, lento mas funcional |
 | Docker | 8 GB VRAM (GPU) | Requer Linux + CUDA. MPS não é suportado em container |
 
-> **`make push-hf` (merge):** requer ≥ 16 GB de RAM — o modelo 9B em bf16 completo ocupa ~18 GB. Em Macs com 8 GB, use `make run` para inferência local com o adaptador LoRA e `make docker-push-hf` para publicar a partir de uma máquina com mais memória.
+> **`make push-hf` (merge):** requer ≥ 6 GB de RAM — o modelo 2B em bf16 completo ocupa ~4 GB.
 
 ### Espaço em disco
 
 | Item | Tamanho |
 |---|---|
-| Modelo GGUF base (inferência) | ~5.4 GB |
-| Modelo HF (treino, em cache) | ~18 GB |
-| Adaptador LoRA HF gerado | ~200 MB |
-| Adaptador LoRA GGUF gerado | ~50 MB |
-| Modelo fundido (merge, bf16) | ~18 GB |
+| Modelo GGUF base (inferência) | ~1.5 GB |
+| Modelo HF (treino, em cache) | ~4 GB |
+| Adaptador LoRA HF gerado | ~50 MB |
+| Adaptador LoRA GGUF gerado | ~15 MB |
+| Modelo fundido (merge, bf16) | ~4 GB |
 
 ---
 
@@ -128,9 +128,9 @@ cp .env.example .env
 | `WP_USERNAME` | *(vazio)* | Usuário (opcional, API pública) |
 | `WP_APP_PASSWORD` | *(vazio)* | Senha de aplicativo do WordPress |
 | `MAX_POSTS` | `0` (todos) | Limite de posts a extrair |
-| `MODEL_HF_ID` | `Qwen/Qwen3.5-9B` | Modelo HuggingFace para treino |
-| `MODEL_REPO_ID` | `unsloth/Qwen3.5-9B-GGUF` | Repositório do GGUF base |
-| `MODEL_FILENAME` | `Qwen3.5-9B-Q4_K_M.gguf` | Arquivo GGUF local |
+| `MODEL_HF_ID` | `Qwen/Qwen3.5-2B` | Modelo HuggingFace para treino |
+| `MODEL_REPO_ID` | `unsloth/Qwen3.5-2B-GGUF` | Repositório do GGUF base |
+| `MODEL_FILENAME` | `Qwen3.5-2B-Q4_K_M.gguf` | Arquivo GGUF local |
 | `TRAIN_ITERS` | `500` | Iterações de treino |
 | `CPU_THREADS` | `6` | Threads para compilação e inferência |
 | `HF_TOKEN` | *(vazio)* | Token HF com permissão de escrita — necessário para `make push-hf` |
@@ -158,7 +158,7 @@ make setup
 make download-base
 ```
 
-- Baixa `Qwen3.5-9B-Q4_K_M.gguf` (~5.4 GB) para `models/base/`
+- Baixa `Qwen3.5-2B-Q4_K_M.gguf` (~1.5 GB) para `models/base/`
 - Usado exclusivamente para inferência com `llama-cli`
 
 ### 3. Extração dos dados
@@ -181,16 +181,16 @@ make extract
 make train
 ```
 
-- Baixa `Qwen/Qwen3.5-9B` do HuggingFace (~18 GB, fica em cache após o primeiro uso)
-- Aplica QLoRA 4-bit via `bitsandbytes` (~4.5 GB em memória)
+- Baixa `Qwen/Qwen3.5-2B` do HuggingFace (~4 GB, fica em cache após o primeiro uso)
+- Aplica QLoRA 4-bit via `bitsandbytes` (~2 GB em memória)
 - Treina por 500 iterações com `SFTTrainer`
 - Salva o adaptador em `models/lora-hf/`
 
 | Ambiente | Modo | Memória usada |
 |---|---|---|
-| CUDA | QLoRA 4-bit | ~6–8 GB VRAM (cap em 6.5 GB) |
-| Apple Silicon (MPS) | QLoRA 4-bit | ~6 GB memória unificada |
-| CPU | float32 | ~36 GB RAM |
+| CUDA | QLoRA 4-bit | ~2–3 GB VRAM |
+| Apple Silicon (MPS) | QLoRA 4-bit | ~2.5 GB memória unificada |
+| CPU | float32 | ~8 GB RAM |
 
 ### 5. Exportação LoRA → GGUF
 
@@ -214,7 +214,7 @@ Requer `HF_TOKEN` e `HF_PUSH_REPO` no `.env`.
 - Salva o modelo fundido em `models/merged/`
 - Faz push para o HF Hub como repositório **privado**
 
-> **Hardware:** o merge requer ~18 GB de RAM livre (o modelo 9B em bf16 completo). Em máquinas com pouca memória, prefira `make docker-push-hf`.
+> **Hardware:** o merge requer ~6 GB de RAM livre (o modelo 2B em bf16 completo ocupa ~4 GB).
 
 ### 7. Inferência interativa
 
@@ -290,4 +290,4 @@ Para ajustar o comportamento de recusa, edite `prompts/prompts.yaml` (system pro
 - **Por que o treino não usa llama-finetune?** O Qwen3.5 é uma arquitetura híbrida SSM+Transformer (Gated Delta Net). O `llama-finetune` não suporta backward pass para camadas SSM — o treino via Python+PEFT contorna essa limitação.
 - **Merge vs. adaptador:** `make push-hf` funde os pesos LoRA no modelo base — o resultado não precisa do adaptador para rodar. `make run` usa o adaptador separado via llama.cpp, o que é mais leve localmente.
 - **Cache HuggingFace:** o modelo de treino (~18 GB) fica em `~/.cache/huggingface/`. Para liberar disco: `huggingface-cli delete-cache`.
-- **Tamanho do adaptador:** o LoRA treina apenas 43M de 9B parâmetros (0.48%). O `adapter.gguf` resultante tem ~50 MB.
+- **Tamanho do adaptador:** o LoRA treina uma fração pequena dos 2B parâmetros. O `adapter.gguf` resultante tem ~15 MB.

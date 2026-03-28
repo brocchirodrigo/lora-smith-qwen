@@ -27,8 +27,8 @@ class Settings(BaseSettings):
     wp_app_password: str = ""
     max_posts: int = 0
 
-    model_hf_id: str = "Qwen/Qwen3.5-9B"
-    model_filename: str = "Qwen3.5-9B-Q4_K_M.gguf"
+    model_hf_id: str = "Qwen/Qwen3.5-2B"
+    model_filename: str = "Qwen3.5-2B-Q4_K_M.gguf"
 
     train_iters: int = 500
     cpu_threads: int = 6

@@ -118,7 +118,7 @@ class _ChunkedLMHeadTrainer(SFTTrainer):
 
     O problema: `logits.float()` no ForCausalLMLoss do transformers cria um
     tensor fp32 de ~154 MB de uma vez — impossível quando a GPU tem <100 MB livres
-    após carregar o modelo 9B em 4-bit.
+    após carregar o modelo 2B em 4-bit.
 
     Solução: calcula lm_head + cross-entropy em fatias de _CHUNK tokens com
     gradient checkpointing por fatia. O tensor de logits completo nunca existe
