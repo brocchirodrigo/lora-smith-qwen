@@ -60,9 +60,7 @@ def load_model_and_tokenizer(device: str):
     print(f"  → Modelo HF: {model_id}")
 
     if device == "cuda":
-        # device_map={"": 0} força todo o modelo na GPU 0.
-        # bitsandbytes 4-bit não suporta offload para CPU/disco — usar "auto"
-        # com max_memory faz o accelerate tentar offload e causa ValueError.
+        os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
         try:
             from transformers import BitsAndBytesConfig
             bnb = BitsAndBytesConfig(
@@ -84,11 +82,6 @@ def load_model_and_tokenizer(device: str):
             print("  → Modo: float16 (CUDA, tudo na GPU 0)")
 
     elif device == "mps":
-        # QLoRA 4-bit limita o modelo a ~4.5 GB de memória unificada.
-        # Em Macs com 8 GB, o sistema reserva ~1-2 GB → sobram ~2-3 GB para
-        # ativações e estados do otimizador LoRA. max_length=512 é obrigatório.
-        # set_per_process_memory_fraction não é aplicado durante o carregamento
-        # pois o bitsandbytes carrega parcialmente em bf16, causando OOM falso.
         from transformers import BitsAndBytesConfig
         bnb = BitsAndBytesConfig(
             load_in_4bit=True,
@@ -100,7 +93,6 @@ def load_model_and_tokenizer(device: str):
         print("  → Modo: QLoRA 4-bit (Apple Silicon MPS, conservador para 8 GB)")
 
     else:
-        # CPU: limita threads para não saturar todos os núcleos
         torch.set_num_threads(max(1, settings.cpu_threads - 2))
         os.environ["OMP_NUM_THREADS"] = str(max(1, settings.cpu_threads - 2))
         load_kwargs.update({"torch_dtype": torch.float32, "low_cpu_mem_usage": True})
@@ -141,11 +133,8 @@ def main() -> None:
     print(f"  Treino: {len(train_dataset)} | Validação: {len(valid_dataset) if valid_dataset else 0}")
 
     use_bf16 = device in ("cuda", "mps")
-
-    # Em MPS com 8 GB: acumula mais passos para compensar o batch pequeno
-    # e usar use_reentrant=False reduz o pico de memória no backward.
     grad_accum = 8 if device == "mps" else 4
-    gc_kwargs = {"use_reentrant": False} if device == "mps" else {}
+    gc_kwargs = {"use_reentrant": False} if device in ("cuda", "mps") else {}
 
     training_args = SFTConfig(
         output_dir=str(LORA_HF_DIR),
@@ -168,7 +157,7 @@ def main() -> None:
         eval_strategy="steps" if valid_dataset else "no",
         eval_steps=100 if valid_dataset else None,
         dataset_text_field="text",
-        max_length=512,   # 512 é o limite seguro para 8 GB de memória unificada
+        max_length=256,
         packing=False,
     )
 
