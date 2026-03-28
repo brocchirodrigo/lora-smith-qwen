@@ -21,7 +21,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from src.config.settings import settings
 
 # O modelo 2B em bfloat16 completo ocupa ~4 GB.
-# Com swap/disco o processo se torna inviável — exige RAM física suficiente.
+# Verificamos RAM disponível (não total) — outros processos consomem memória.
 _MIN_RAM_GB = 6
 
 LORA_HF_DIR  = Path("models/lora-hf")
@@ -32,15 +32,16 @@ def main() -> None:
     if not LORA_HF_DIR.exists():
         raise FileNotFoundError(f"Adaptador LoRA não encontrado em {LORA_HF_DIR}. Execute: make train")
 
-    ram_gb = psutil.virtual_memory().total / (1024 ** 3)
-    if ram_gb < _MIN_RAM_GB:
+    mem = psutil.virtual_memory()
+    ram_available_gb = mem.available / (1024 ** 3)
+    ram_total_gb = mem.total / (1024 ** 3)
+    if ram_available_gb < _MIN_RAM_GB:
         raise MemoryError(
-            f"Merge requer ≥ {_MIN_RAM_GB} GB de RAM física. "
-            f"Detectado: {ram_gb:.1f} GB.\n"
-            f"  → Em Macs com 8 GB, use o adaptador LoRA localmente (make run)\n"
-            f"    e publique via uma máquina com mais memória (make docker-push-hf)."
+            f"Merge requer ≥ {_MIN_RAM_GB} GB de RAM disponível. "
+            f"Disponível: {ram_available_gb:.1f} GB de {ram_total_gb:.1f} GB.\n"
+            f"  → Feche outros processos ou use uma máquina com mais memória livre."
         )
-    print(f"  → RAM disponível: {ram_gb:.1f} GB — OK")
+    print(f"  → RAM disponível: {ram_available_gb:.1f} GB de {ram_total_gb:.1f} GB — OK")
 
     if not settings.hf_token:
         raise ValueError("HF_TOKEN não definido no .env")
@@ -49,7 +50,7 @@ def main() -> None:
         raise ValueError("HF_PUSH_REPO não definido no .env (ex: seu-usuario/nome-do-modelo)")
 
     print(f"\n→ Carregando modelo base: {settings.model_hf_id}")
-    # Merge precisa de pesos em float16/bfloat16 completos — sem quantização 4-bit
+    # Merge precisa de pesos em bfloat16 completos — sem quantização 4-bit
     model = AutoModelForCausalLM.from_pretrained(
         settings.model_hf_id,
         torch_dtype=torch.bfloat16,
@@ -67,20 +68,26 @@ def main() -> None:
     print(f"→ Salvando modelo fundido em {MERGED_DIR}...")
     model.save_pretrained(str(MERGED_DIR))
     tokenizer.save_pretrained(str(MERGED_DIR))
+    print(f"  ✓ Modelo salvo localmente em {MERGED_DIR}")
 
     print(f"\n→ Fazendo push para o Hugging Face Hub: {settings.hf_push_repo}")
-    model.push_to_hub(
-        settings.hf_push_repo,
-        token=settings.hf_token,
-        private=True,
-    )
-    tokenizer.push_to_hub(
-        settings.hf_push_repo,
-        token=settings.hf_token,
-        private=True,
-    )
-
-    print(f"\n✓ Modelo publicado em: https://huggingface.co/{settings.hf_push_repo}")
+    try:
+        model.push_to_hub(
+            settings.hf_push_repo,
+            token=settings.hf_token,
+            private=True,
+        )
+        tokenizer.push_to_hub(
+            settings.hf_push_repo,
+            token=settings.hf_token,
+            private=True,
+        )
+        print(f"\n✓ Modelo publicado em: https://huggingface.co/{settings.hf_push_repo}")
+    except Exception as exc:
+        print(f"\n⚠ Push falhou: {exc}")
+        print(f"  O modelo está salvo localmente em {MERGED_DIR.resolve()}")
+        print("  Para tentar novamente: make push-hf")
+        raise
 
 
 if __name__ == "__main__":

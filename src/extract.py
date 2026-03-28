@@ -58,12 +58,12 @@ async def main() -> None:
                 description=f"[cyan]Processando post #{post.id}[/cyan] — {total_posts} encontrados",
             )
 
-            entry = formatter.format_post(post)
-            if entry is None:
+            post_entries = formatter.format_post(post)
+            if post_entries is None:
                 skipped += 1
                 continue
 
-            entries.append(entry)
+            entries.extend(post_entries)
 
     # Gera exemplos negativos: 25% do total de positivos, mínimo 30
     n_negatives = max(30, int(len(entries) * 0.25))

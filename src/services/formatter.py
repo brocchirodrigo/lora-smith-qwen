@@ -5,30 +5,60 @@ from src.services.html_cleaner import HTMLCleaner
 _IM_START = "<|im_start|>"
 _IM_END = "<|im_end|>"
 
+# Cada tupla é (fn_pergunta, fn_resposta).
+# As variantes diretas (0–2) respondem com o conteúdo puro.
+# As variantes vagas (3–4) prefixam a resposta com "Pode ser relacionado a [título]."
+# para treinar o padrão cooperativo de sugestão por similaridade.
+_VARIANTS: list[tuple] = [
+    (
+        lambda t: t,
+        lambda t, c: c,
+    ),
+    (
+        lambda t: f"Preciso de ajuda com {t.lower()}.",
+        lambda t, c: c,
+    ),
+    (
+        lambda t: f"Me explica sobre {t.lower()}.",
+        lambda t, c: c,
+    ),
+    (
+        lambda t: f"Não estou conseguindo {t.lower()}, pode me ajudar?",
+        lambda t, c: f"Pode ser relacionado a {t}.\n\n{c}",
+    ),
+    (
+        lambda t: f"Tenho uma dúvida sobre {t.lower()}.",
+        lambda t, c: f"Pode ser relacionado a {t}.\n\n{c}",
+    ),
+]
+
 
 class ChatMLFormatter:
     """
     Formata posts do WordPress no formato ChatML do Qwen3.
 
-    O llama-finetune consome texto plano onde os tokens especiais
-    já estão injetados diretamente na string (sem JSONL).
+    Cada artigo gera 5 entradas com variações naturais do título como
+    pergunta do usuário:
+      - 3 variantes diretas: resposta é o conteúdo puro
+      - 2 variantes vagas: resposta é prefixada com "Pode ser relacionado a [título]."
+        para treinar a persona cooperativa de sugestão por similaridade
 
-    Cada entrada segue o template:
+    Formato de cada entrada:
         <|im_start|>system
         {system_prompt}<|im_end|>
         <|im_start|>user
-        {titulo_do_artigo}<|im_end|>
+        {variante_da_pergunta}<|im_end|>
         <|im_start|>assistant
-        {conteudo_limpo}<|im_end|>
+        {resposta}<|im_end|>
     """
 
     def __init__(self, settings: Settings) -> None:
         self._system_prompt = settings.system_prompt
         self._cleaner = HTMLCleaner()
 
-    def format_post(self, post: WPPost) -> str | None:
+    def format_post(self, post: WPPost) -> list[str] | None:
         """
-        Converte um WPPost em uma entrada ChatML válida.
+        Converte um WPPost em múltiplas entradas ChatML.
         Retorna None se o conteúdo for muito curto para treinar.
         """
         title = self._cleaner.clean(post.title.rendered)
@@ -37,12 +67,17 @@ class ChatMLFormatter:
         if len(content) < 100:
             return None
 
-        entry = (
-            f"{_IM_START}system\n"
-            f"{self._system_prompt}{_IM_END}\n"
-            f"{_IM_START}user\n"
-            f"{title}{_IM_END}\n"
-            f"{_IM_START}assistant\n"
-            f"{content}{_IM_END}\n"
-        )
-        return entry
+        entries = []
+        for question_fn, answer_fn in _VARIANTS:
+            question = question_fn(title)
+            answer = answer_fn(title, content)
+            entry = (
+                f"{_IM_START}system\n"
+                f"{self._system_prompt}{_IM_END}\n"
+                f"{_IM_START}user\n"
+                f"{question}{_IM_END}\n"
+                f"{_IM_START}assistant\n"
+                f"{answer}{_IM_END}\n"
+            )
+            entries.append(entry)
+        return entries

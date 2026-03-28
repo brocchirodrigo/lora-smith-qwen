@@ -10,12 +10,12 @@ Treino via Python (PEFT/TRL) em qualquer ambiente — CUDA, Apple Silicon ou CPU
 
 ```bash
 make setup           # 1. instala dependências e compila llama.cpp
-make download-base   # 2. baixa o modelo GGUF base (~5.4 GB)
+make download-base   # 2. baixa o modelo GGUF base (~1.5 GB)
 make extract         # 3. extrai posts do WordPress e gera o dataset
 make train           # 4. fine-tuning LoRA (CUDA / MPS / CPU)
 make export-lora     # 5. converte adaptador HF → GGUF
 make run             # 6. chat interativo com o modelo treinado
-make push-hf         # 7. (opcional) merge + publicação no HF Hub — exige ≥ 16 GB RAM
+make push-hf         # 7. (opcional) merge + publicação no HF Hub — exige ≥ 6 GB RAM disponível
 ```
 
 Cada etapa depende da anterior. As etapas 1–3 só precisam ser refeitas se o ambiente ou o conteúdo do WordPress mudar.
@@ -43,9 +43,9 @@ Cada etapa depende da anterior. As etapas 1–3 só precisam ser refeitas se o a
 | Apple Silicon (M1/M2/M3) | 8 GB | Memória unificada. Treino em QLoRA 4-bit via MPS |
 | Linux + CUDA | 4 GB VRAM | QLoRA 4-bit via bitsandbytes |
 | Linux CPU | 24 GB RAM | Treino em fp32, lento mas funcional |
-| Docker | 8 GB VRAM (GPU) | Requer Linux + CUDA. MPS não é suportado em container |
+| Docker | 4 GB VRAM (GPU) | Requer Linux + CUDA. MPS não é suportado em container |
 
-> **`make push-hf` (merge):** requer ≥ 6 GB de RAM — o modelo 2B em bf16 completo ocupa ~4 GB.
+> **`make push-hf` (merge):** requer ≥ 6 GB de RAM **disponível** — o modelo 2B em bf16 completo ocupa ~4 GB.
 
 ### Espaço em disco
 
@@ -53,7 +53,7 @@ Cada etapa depende da anterior. As etapas 1–3 só precisam ser refeitas se o a
 |---|---|
 | Modelo GGUF base (inferência) | ~1.5 GB |
 | Modelo HF (treino, em cache) | ~4 GB |
-| Adaptador LoRA HF gerado | ~50 MB |
+| Adaptador LoRA HF gerado | ~10 MB |
 | Adaptador LoRA GGUF gerado | ~15 MB |
 | Modelo fundido (merge, bf16) | ~4 GB |
 
@@ -87,7 +87,7 @@ lora-smith-qwen/
 ├── Makefile                   # Orquestrador do pipeline (local e Docker)
 ├── pyproject.toml
 ├── prompts/
-│   └── prompts.yaml           # System prompt restritivo
+│   └── prompts.yaml           # System prompt com persona cooperativa
 ├── data/
 │   └── processed/
 │       ├── train.jsonl        # Dataset de treino (ChatML em JSONL)
@@ -106,8 +106,8 @@ lora-smith-qwen/
     │   └── wp_client.py       # Cliente WordPress REST API
     ├── services/
     │   ├── html_cleaner.py
-    │   ├── formatter.py       # ChatMLFormatter — exemplos positivos (WP → resposta)
-    │   └── negative_generator.py  # Exemplos negativos (off-topic → recusa)
+    │   ├── formatter.py       # ChatMLFormatter — 5 variantes por artigo
+    │   └── negative_generator.py  # Exemplos negativos (~140 perguntas off-topic)
     ├── extract.py             # Extração, formatação e mix de exemplos negativos
     ├── train.py               # Fine-tuning LoRA (CUDA/MPS/CPU)
     └── merge.py               # Merge LoRA + base e push para o Hugging Face Hub
@@ -136,7 +136,7 @@ cp .env.example .env
 | `HF_TOKEN` | *(vazio)* | Token HF com permissão de escrita — necessário para `make push-hf` |
 | `HF_PUSH_REPO` | *(vazio)* | Repositório de destino no HF Hub (ex: `seu-usuario/nome-do-modelo`) |
 
-O system prompt fica em `prompts/prompts.yaml` — edite diretamente sem tocar no `.env`.
+O system prompt e a persona do modelo ficam em `prompts/prompts.yaml` — edite diretamente sem tocar no `.env`.
 
 ---
 
@@ -168,8 +168,10 @@ make extract
 ```
 
 - Consulta a API REST do WordPress e pagina todos os posts publicados
-- Formata cada artigo em ChatML (system / user / assistant) — **exemplos positivos**
-- Gera automaticamente exemplos **negativos** (off-topic → recusa) correspondendo a 25% do total de positivos (mínimo 30), cobrindo perguntas de conhecimento geral, programação, matemática, culinária, esportes, saúde e outros domínios
+- Formata cada artigo em **5 variantes ChatML** por artigo:
+  - 3 variantes diretas: título exato, "Preciso de ajuda com...", "Me explica sobre..."
+  - 2 variantes vagas: "Não estou conseguindo...", "Tenho uma dúvida sobre..." — resposta prefixada com "Pode ser relacionado a [título].", treinando a persona cooperativa
+- Gera automaticamente exemplos **negativos** (off-topic → recusa) em ~140 perguntas de 13 categorias (conhecimento geral, programação, matemática, culinária, esportes, entretenimento, saúde, clima, finanças, história, viagens, pets, jurídico), correspondendo a 25% do total de positivos (mínimo 30)
 - Embaralha positivos e negativos antes de dividir
 - Salva em `data/processed/train.jsonl` (95%) e `valid.jsonl` (5%)
 
@@ -182,8 +184,9 @@ make train
 ```
 
 - Baixa `Qwen/Qwen3.5-2B` do HuggingFace (~4 GB, fica em cache após o primeiro uso)
-- Aplica QLoRA 4-bit via `bitsandbytes` (~2 GB em memória)
+- Aplica QLoRA 4-bit via `bitsandbytes` (~1.5 GB em memória)
 - Treina por 500 iterações com `SFTTrainer`
+- LoRA aplicado apenas nas camadas de atenção (`q_proj`, `v_proj`) — suficiente para comportamento restritivo e ~2x mais rápido que treinar todas as camadas lineares
 - Salva o adaptador em `models/lora-hf/`
 
 | Ambiente | Modo | Memória usada |
@@ -198,7 +201,7 @@ make train
 make export-lora
 ```
 
-- Converte `models/lora-hf/` para `models/lora/adapter.gguf` (~50 MB)
+- Converte `models/lora-hf/` para `models/lora/adapter.gguf` (~15 MB)
 - Usa `convert_lora_to_gguf.py` do llama.cpp
 
 ### 6. Publicação no Hugging Face Hub (opcional)
@@ -209,12 +212,11 @@ make push-hf
 
 Requer `HF_TOKEN` e `HF_PUSH_REPO` no `.env`.
 
+- Verifica RAM **disponível** (≥ 6 GB) antes de iniciar — outros processos em execução são considerados
 - Carrega o modelo base em **bfloat16 completo** (sem quantização) — necessário para fundir os pesos
 - Funde o adaptador LoRA no modelo base com `merge_and_unload()` — o resultado é um modelo independente, sem dependência do adaptador
-- Salva o modelo fundido em `models/merged/`
+- Salva o modelo fundido localmente em `models/merged/` antes de fazer push — se a rede falhar, o modelo não é perdido
 - Faz push para o HF Hub como repositório **privado**
-
-> **Hardware:** o merge requer ~6 GB de RAM livre (o modelo 2B em bf16 completo ocupa ~4 GB).
 
 ### 7. Inferência interativa
 
@@ -270,17 +272,23 @@ Remove `data/processed/`, `models/lora/`, `models/lora-hf/` e `models/merged/`. 
 
 ---
 
-## Restrição absoluta de escopo
+## Persona e escopo do modelo
 
-O modelo é treinado para responder **exclusivamente** com base no conteúdo extraído do WordPress. Qualquer pergunta fora desse escopo recebe uma recusa explícita.
+O modelo é treinado com uma **persona cooperativa** que segue três regras de comportamento:
 
-Isso é garantido por dois mecanismos combinados:
+1. **Pergunta coberta → responde diretamente** com o conteúdo disponível.
+2. **Pergunta vaga ou incompleta → sugere por similaridade**: identifica o tema mais próximo na base de conhecimento e inicia a resposta com "Pode ser relacionado a [tema]." antes de responder.
+3. **Pergunta completamente fora do escopo → recusa** com "Não tenho essa informação."
 
-1. **System prompt restritivo** (`prompts/prompts.yaml`): instrui o modelo a nunca usar conhecimento externo e a listar categorias proibidas explicitamente (programação genérica, matemática, culinária, saúde etc.)
+Isso é garantido por três mecanismos combinados:
 
-2. **Exemplos negativos no dataset**: durante o `make extract`, são gerados automaticamente exemplos de perguntas off-topic pareadas com respostas de recusa variadas (em pt-BR e en). O modelo aprende a recusar — não apenas a responder no estilo correto.
+1. **System prompt cooperativo** (`prompts/prompts.yaml`): define as três regras de comportamento e instrui o modelo a nunca usar conhecimento externo.
 
-Para ajustar o comportamento de recusa, edite `prompts/prompts.yaml` (system prompt) e `src/services/negative_generator.py` (banco de perguntas e frases de recusa).
+2. **Variantes de treino por artigo**: cada artigo gera 5 entradas — 3 diretas e 2 vagas com resposta prefixada "Pode ser relacionado a...", ensinando o padrão de sugestão por similaridade ao modelo.
+
+3. **Exemplos negativos no dataset**: ~140 perguntas off-topic em 13 categorias, cada uma pareada com uma resposta de recusa variada. O modelo aprende a recusar perguntas fora do escopo.
+
+Para ajustar o comportamento, edite `prompts/prompts.yaml` (persona e regras), `src/services/formatter.py` (variantes de pergunta) e `src/services/negative_generator.py` (banco de perguntas e frases de recusa).
 
 ---
 
@@ -288,6 +296,7 @@ Para ajustar o comportamento de recusa, edite `prompts/prompts.yaml` (system pro
 
 - **Por que GGUF para inferência?** O `llama-cli` roda em qualquer plataforma (macOS, Linux, Windows, Docker) sem dependências de Python ou CUDA. O `adapter.gguf` é carregado em runtime junto ao modelo base, sem fundir os pesos.
 - **Por que o treino não usa llama-finetune?** O Qwen3.5 é uma arquitetura híbrida SSM+Transformer (Gated Delta Net). O `llama-finetune` não suporta backward pass para camadas SSM — o treino via Python+PEFT contorna essa limitação.
+- **Por que apenas `q_proj` e `v_proj`?** Para fine-tuning de comportamento restritivo, as camadas de atenção são suficientes. Treinar todas as camadas lineares (`all-linear`) consumiria ~2x mais memória e tempo sem ganho relevante para tarefas de escopo estreito.
 - **Merge vs. adaptador:** `make push-hf` funde os pesos LoRA no modelo base — o resultado não precisa do adaptador para rodar. `make run` usa o adaptador separado via llama.cpp, o que é mais leve localmente.
-- **Cache HuggingFace:** o modelo de treino (~18 GB) fica em `~/.cache/huggingface/`. Para liberar disco: `huggingface-cli delete-cache`.
-- **Tamanho do adaptador:** o LoRA treina uma fração pequena dos 2B parâmetros. O `adapter.gguf` resultante tem ~15 MB.
+- **Cache HuggingFace:** o modelo de treino (~4 GB) fica em `~/.cache/huggingface/`. Para liberar disco: `huggingface-cli delete-cache`.
+- **Tamanho do adaptador:** o LoRA treina apenas `q_proj` e `v_proj` de um modelo 2B. O `adapter.gguf` resultante tem ~15 MB.

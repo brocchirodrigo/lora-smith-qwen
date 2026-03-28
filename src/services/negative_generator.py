@@ -1,7 +1,7 @@
 """
 Gera exemplos negativos (off-topic) para treinar a restrição absoluta do modelo.
 
-Qualquer pergunta fora do conteúdo do WordPress deve receber recusa.
+Qualquer pergunta fora do conteúdo disponível deve receber recusa.
 Os exemplos cobrem categorias diversas para que o modelo generalize a rejeição.
 """
 
@@ -12,8 +12,6 @@ _IM_START = "<|im_start|>"
 _IM_END   = "<|im_end|>"
 
 # ─── Banco de perguntas off-topic ─────────────────────────────────────────────
-# Categorias: conhecimento geral, programação genérica, matemática, culinária,
-# esportes, política, entretenimento, saúde, clima, tradução, conselhos pessoais.
 
 _OFF_TOPIC_PT = [
     # Conhecimento geral
@@ -27,6 +25,9 @@ _OFF_TOPIC_PT = [
     "Qual é a fórmula química da água?",
     "Quantos ossos tem o corpo humano?",
     "Qual é o animal mais rápido do mundo?",
+    "Qual é a montanha mais alta do mundo?",
+    "Quem foi Albert Einstein?",
+    "O que é a teoria da relatividade?",
     # Programação genérica
     "Como criar uma lista em Python?",
     "O que é uma API REST?",
@@ -38,6 +39,9 @@ _OFF_TOPIC_PT = [
     "Como funciona o Git?",
     "O que é machine learning?",
     "Como fazer deploy de uma aplicação Docker?",
+    "O que é um banco de dados relacional?",
+    "Como funciona o React?",
+    "O que é uma variável em programação?",
     # Matemática
     "Quanto é a raiz quadrada de 144?",
     "Resolva: 2x + 5 = 13",
@@ -46,35 +50,92 @@ _OFF_TOPIC_PT = [
     "O que é um número primo?",
     "Quanto é 15% de 200?",
     "Como converter graus Celsius em Fahrenheit?",
+    "O que é uma derivada?",
+    "Como calcular juros compostos?",
     # Culinária
     "Como fazer bolo de cenoura?",
     "Qual é a receita de brigadeiro?",
     "Como preparar risoto?",
     "Qual é o tempo de cozimento do arroz?",
     "Como fazer pão caseiro?",
+    "Qual a diferença entre fritar e refogar?",
+    "Como temperar uma frigideira de ferro?",
     # Esportes
     "Quantas copas do mundo o Brasil ganhou?",
     "Quem é o artilheiro histórico da Champions League?",
     "Quais são as regras do vôlei?",
     "Como funciona o sistema de pontos no tênis?",
     "Quando são os próximos Jogos Olímpicos?",
+    "Qual é o recorde mundial dos 100 metros rasos?",
+    "Como funciona o VAR no futebol?",
     # Entretenimento
     "Qual é o filme mais assistido da Netflix?",
     "Quem canta a música 'Evidências'?",
     "Qual é o último episódio de Breaking Bad?",
     "Me recomende um livro de ficção científica.",
     "Quais são as melhores séries do momento?",
+    "Qual foi o vencedor do Oscar de melhor filme?",
+    "Me indique um podcast de tecnologia.",
     # Saúde e medicina
     "Quais são os sintomas da gripe?",
     "O que é hipertensão arterial?",
     "Como tratar uma dor de cabeça?",
     "Quantas horas de sono um adulto precisa?",
     "O que é diabetes tipo 2?",
+    "Qual é a dose diária recomendada de vitamina C?",
+    "Quais são os benefícios da meditação?",
+    "Como controlar a ansiedade?",
     # Clima e geografia
     "Vai chover amanhã em São Paulo?",
     "Qual é a temperatura média do Amazonas?",
     "Quantos estados tem o Brasil?",
     "Qual é o rio mais longo do mundo?",
+    "Qual é o país mais populoso do mundo?",
+    "Qual é o fuso horário de Brasília?",
+    # Finanças pessoais
+    "Como funciona o Tesouro Direto?",
+    "O que é CDB?",
+    "Como declarar imposto de renda?",
+    "Qual é a melhor corretora de investimentos?",
+    "O que é FII?",
+    "Como funciona o FGTS?",
+    "Como sair das dívidas?",
+    "Qual é a diferença entre ações e fundos de investimento?",
+    # História
+    "Quando terminou a Segunda Guerra Mundial?",
+    "Quem foi Napoleão Bonaparte?",
+    "O que foi a Revolução Industrial?",
+    "Quando o homem pisou na Lua?",
+    "O que foi o Iluminismo?",
+    "Quem foram os Maias?",
+    "O que foi a Guerra Fria?",
+    # Viagens
+    "Quais são os documentos necessários para viajar para a Europa?",
+    "Preciso de visto para ir ao Japão?",
+    "Qual é a melhor época para visitar Machu Picchu?",
+    "Quais são as principais atrações de Lisboa?",
+    "Como é o metrô de Londres?",
+    "Me recomende hotéis baratos em Buenos Aires.",
+    # Animais e pets
+    "Como adestrar um cachorro?",
+    "Qual é a expectativa de vida de um gato?",
+    "O que um labrador pode comer?",
+    "Como tratar uma infecção em peixe de aquário?",
+    "Quais vacinas um cachorro precisa tomar por ano?",
+    # Juridico e burocracia
+    "Como registrar uma empresa no Brasil?",
+    "O que é habeas corpus?",
+    "Como funciona a CLT?",
+    "O que é usufruto?",
+    "Como funciona o seguro-desemprego?",
+    "O que é CNPJ?",
+    # Ciência e tecnologia
+    "O que é inteligência artificial?",
+    "Como funciona o GPS?",
+    "O que é energia solar?",
+    "Como funciona a internet?",
+    "O que é blockchain?",
+    "Como funciona um motor elétrico?",
     # Conselhos pessoais e outros
     "Como me tornar mais produtivo?",
     "Me dê dicas para aprender inglês rápido.",
@@ -86,6 +147,8 @@ _OFF_TOPIC_PT = [
     "Traduza 'good morning' para o japonês.",
     "Qual é o melhor smartphone do mercado?",
     "Como funciona o Pix?",
+    "Me dê uma dica de leitura para este mês.",
+    "Como aprender a tocar violão?",
 ]
 
 _OFF_TOPIC_EN = [
@@ -95,17 +158,28 @@ _OFF_TOPIC_EN = [
     "Who wrote Romeo and Juliet?",
     "What year did World War II end?",
     "What is the speed of light?",
+    "Who was Isaac Newton?",
+    "What is the Big Bang theory?",
     # Programming
     "How do I reverse a string in JavaScript?",
     "What is the difference between TCP and UDP?",
     "How does garbage collection work in Java?",
     "What is a neural network?",
     "How do I center a div in CSS?",
+    "What is the difference between Git merge and rebase?",
     # Math & science
     "What is the Pythagorean theorem?",
     "How do I calculate compound interest?",
     "What is the periodic table?",
-    # Lifestyle
+    "What is quantum physics?",
+    # Finance
+    "What is an index fund?",
+    "How does the stock market work?",
+    "What is cryptocurrency?",
+    "How do I file taxes in the US?",
+    # Travel & lifestyle
+    "What are the best places to visit in Italy?",
+    "Do I need a visa to visit Canada?",
     "What are some tips for better sleep?",
     "How do I lose weight fast?",
     "Give me a recipe for chocolate cake.",
@@ -113,7 +187,14 @@ _OFF_TOPIC_EN = [
     "Tell me a fun fact.",
     "Write a haiku about summer.",
     "What is the best programming language to learn?",
+    "How do I train my dog to sit?",
+    "What is the life expectancy of a parrot?",
+    # History
+    "Who was Julius Caesar?",
+    "What was the French Revolution?",
+    "When did the Berlin Wall fall?",
 ]
+
 
 _ALL_OFF_TOPIC = _OFF_TOPIC_PT + _OFF_TOPIC_EN
 
@@ -122,9 +203,9 @@ _ALL_OFF_TOPIC = _OFF_TOPIC_PT + _OFF_TOPIC_EN
 _REFUSALS_PT = [
     "Não tenho essa informação.",
     "Essa informação não está disponível na minha base de conhecimento.",
-    "Não encontrei conteúdo sobre isso nos artigos da central de ajuda.",
-    "Não posso responder a isso — meu conhecimento se limita ao conteúdo da central de ajuda.",
-    "Essa pergunta está fora do escopo do meu conteúdo de suporte.",
+    "Não encontrei conteúdo sobre isso na minha base de conhecimento.",
+    "Não posso responder a isso — meu conhecimento se limita ao conteúdo disponível.",
+    "Essa pergunta está fora do escopo do conteúdo disponível.",
     "Não tenho dados sobre esse assunto.",
     "Isso não está coberto nos materiais que tenho disponíveis.",
 ]
@@ -132,9 +213,9 @@ _REFUSALS_PT = [
 _REFUSALS_EN = [
     "I don't have that information.",
     "This is not covered in my knowledge base.",
-    "I couldn't find anything about this in the help center articles.",
-    "I'm unable to answer that — my knowledge is limited to the help center content.",
-    "That question is outside the scope of my support content.",
+    "I couldn't find anything about this in my knowledge base.",
+    "I'm unable to answer that — my knowledge is limited to the available content.",
+    "That question is outside the scope of the available content.",
     "I don't have data on that subject.",
     "This topic is not covered in the materials available to me.",
 ]
@@ -154,8 +235,8 @@ class NegativeExampleGenerator:
     Gera exemplos de treinamento negativos (off-topic → recusa).
 
     Cada exemplo segue o mesmo formato ChatML dos exemplos positivos,
-    com o system prompt restritivo, uma pergunta fora do escopo e
-    uma resposta de recusa variada.
+    com o system prompt, uma pergunta fora do escopo e uma resposta
+    de recusa variada.
     """
 
     def __init__(self, settings: Settings, seed: int = 42) -> None:

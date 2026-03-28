@@ -13,12 +13,9 @@ import os
 from pathlib import Path
 
 import torch
-import torch.nn.functional as F
-from torch.utils.checkpoint import checkpoint as grad_ckpt
 from datasets import Dataset
 from peft import LoraConfig, TaskType
 from transformers import AutoModelForCausalLM, AutoTokenizer
-from transformers.modeling_outputs import CausalLMOutputWithPast
 from trl import SFTConfig, SFTTrainer
 
 from src.config.settings import settings
@@ -26,10 +23,6 @@ from src.config.settings import settings
 TRAIN_FILE   = Path("data/processed/train.jsonl")
 VALID_FILE   = Path("data/processed/valid.jsonl")
 LORA_HF_DIR  = Path("models/lora-hf")
-
-# ─── Limites de memória por ambiente ─────────────────────────────────────────
-# CUDA: conservador para GPUs de 8 GB VRAM (modelo 4-bit ~4.5 GB, ~2 GB para gradientes)
-CUDA_MAX_MEMORY = "6500MiB"
 
 
 # ─── Detecção de dispositivo ──────────────────────────────────────────────────
@@ -110,64 +103,6 @@ def load_model_and_tokenizer(device: str):
     return model, tokenizer
 
 
-# ─── Trainer com CE fatiada ───────────────────────────────────────────────────
-
-class _ChunkedLMHeadTrainer(SFTTrainer):
-    """
-    Evita OOM em GPUs ≤8 GB com vocabulário grande (Qwen3.5: 248k tokens).
-
-    O problema: `logits.float()` no ForCausalLMLoss do transformers cria um
-    tensor fp32 de ~154 MB de uma vez — impossível quando a GPU tem <100 MB livres
-    após carregar o modelo 2B em 4-bit.
-
-    Solução: calcula lm_head + cross-entropy em fatias de _CHUNK tokens com
-    gradient checkpointing por fatia. O tensor de logits completo nunca existe
-    em memória; pico cai de ~154 MB para ~30 MB por fatia.
-    """
-    _CHUNK = 32
-
-    def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
-        labels = inputs.pop("labels")
-
-        # Estrutura do modelo PEFT: PeftModelForCausalLM → LoraModel → Qwen3_5ForCausalLM
-        qwen = model.base_model.model         # Qwen3_5ForCausalLM
-        transformer = qwen.model              # Qwen3_5Model (sem lm_head)
-        lm_head = qwen.lm_head                # Linear com LoRA aplicado
-
-        # Forward pelo transformer até os hidden states (sem lm_head / sem loss)
-        valid_inputs = {
-            k: v for k, v in inputs.items()
-            if k in {"input_ids", "attention_mask", "position_ids", "inputs_embeds"}
-        }
-        hidden_out = transformer(**valid_inputs, use_cache=False, return_dict=True)
-        hidden = hidden_out.last_hidden_state  # [B, T, D] — já normalizados pelo Qwen3_5Model
-
-        T = hidden.shape[1]
-        n_valid = int((labels[:, 1:T] != -100).sum())
-        total_loss = hidden.new_zeros((), dtype=torch.float32)
-
-        def _ce_chunk(h_chunk, lbl):
-            """Calcula CE de uma fatia sem reter logits entre forward e backward."""
-            logits = lm_head(h_chunk).float()
-            return F.cross_entropy(
-                logits.view(-1, logits.size(-1)),
-                lbl,
-                ignore_index=-100,
-                reduction="sum",
-            )
-
-        for start in range(0, T - 1, self._CHUNK):
-            end = min(start + self._CHUNK, T - 1)
-            lbl = labels[:, start + 1 : end + 1].contiguous().view(-1)
-            if (lbl != -100).any():
-                h = hidden[:, start:end].contiguous()
-                total_loss = total_loss + grad_ckpt(_ce_chunk, h, lbl, use_reentrant=False)
-
-        loss = total_loss / max(n_valid, 1)
-        out = CausalLMOutputWithPast(loss=loss)
-        return (loss, out) if return_outputs else loss
-
-
 # ─── Treinamento ──────────────────────────────────────────────────────────────
 
 def main() -> None:
@@ -182,8 +117,8 @@ def main() -> None:
     lora_config = LoraConfig(
         r=16,
         lora_alpha=32,
-        target_modules="all-linear",
-        lora_dropout=0.05,
+        target_modules=["q_proj", "v_proj"],
+        lora_dropout=0.10,
         bias="none",
         task_type=TaskType.CAUSAL_LM,
     )
@@ -194,7 +129,7 @@ def main() -> None:
     print(f"  Treino: {len(train_dataset)} | Validação: {len(valid_dataset) if valid_dataset else 0}")
 
     use_bf16 = device in ("cuda", "mps")
-    grad_accum = 8 if device == "mps" else 4
+    grad_accum = 8  # batch efetivo = 8; CUDA e MPS unificados
     gc_kwargs = {"use_reentrant": False} if device in ("cuda", "mps") else {}
 
     training_args = SFTConfig(
@@ -204,7 +139,7 @@ def main() -> None:
         gradient_accumulation_steps=grad_accum,
         learning_rate=1e-4,
         lr_scheduler_type="cosine",
-        warmup_steps=10,
+        warmup_steps=25,
         logging_steps=10,
         save_steps=100,
         save_total_limit=2,
@@ -218,11 +153,11 @@ def main() -> None:
         eval_strategy="steps" if valid_dataset else "no",
         eval_steps=100 if valid_dataset else None,
         dataset_text_field="text",
-        max_length=256,
+        max_length=512,
         packing=False,
     )
 
-    trainer = _ChunkedLMHeadTrainer(
+    trainer = SFTTrainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset,
