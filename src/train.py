@@ -13,9 +13,12 @@ import os
 from pathlib import Path
 
 import torch
+import torch.nn.functional as F
+from torch.utils.checkpoint import checkpoint as grad_ckpt
 from datasets import Dataset
 from peft import LoraConfig, TaskType
 from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers.modeling_outputs import CausalLMOutputWithPast
 from trl import SFTConfig, SFTTrainer
 
 from src.config.settings import settings
@@ -107,6 +110,64 @@ def load_model_and_tokenizer(device: str):
     return model, tokenizer
 
 
+# ─── Trainer com CE fatiada ───────────────────────────────────────────────────
+
+class _ChunkedLMHeadTrainer(SFTTrainer):
+    """
+    Evita OOM em GPUs ≤8 GB com vocabulário grande (Qwen3.5: 248k tokens).
+
+    O problema: `logits.float()` no ForCausalLMLoss do transformers cria um
+    tensor fp32 de ~154 MB de uma vez — impossível quando a GPU tem <100 MB livres
+    após carregar o modelo 9B em 4-bit.
+
+    Solução: calcula lm_head + cross-entropy em fatias de _CHUNK tokens com
+    gradient checkpointing por fatia. O tensor de logits completo nunca existe
+    em memória; pico cai de ~154 MB para ~30 MB por fatia.
+    """
+    _CHUNK = 32
+
+    def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
+        labels = inputs.pop("labels")
+
+        # Estrutura do modelo PEFT: PeftModelForCausalLM → LoraModel → Qwen3_5ForCausalLM
+        qwen = model.base_model.model         # Qwen3_5ForCausalLM
+        transformer = qwen.model              # Qwen3_5Model (sem lm_head)
+        lm_head = qwen.lm_head                # Linear com LoRA aplicado
+
+        # Forward pelo transformer até os hidden states (sem lm_head / sem loss)
+        valid_inputs = {
+            k: v for k, v in inputs.items()
+            if k in {"input_ids", "attention_mask", "position_ids", "inputs_embeds"}
+        }
+        hidden_out = transformer(**valid_inputs, use_cache=False, return_dict=True)
+        hidden = hidden_out.last_hidden_state  # [B, T, D] — já normalizados pelo Qwen3_5Model
+
+        T = hidden.shape[1]
+        n_valid = int((labels[:, 1:T] != -100).sum())
+        total_loss = hidden.new_zeros((), dtype=torch.float32)
+
+        def _ce_chunk(h_chunk, lbl):
+            """Calcula CE de uma fatia sem reter logits entre forward e backward."""
+            logits = lm_head(h_chunk).float()
+            return F.cross_entropy(
+                logits.view(-1, logits.size(-1)),
+                lbl,
+                ignore_index=-100,
+                reduction="sum",
+            )
+
+        for start in range(0, T - 1, self._CHUNK):
+            end = min(start + self._CHUNK, T - 1)
+            lbl = labels[:, start + 1 : end + 1].contiguous().view(-1)
+            if (lbl != -100).any():
+                h = hidden[:, start:end].contiguous()
+                total_loss = total_loss + grad_ckpt(_ce_chunk, h, lbl, use_reentrant=False)
+
+        loss = total_loss / max(n_valid, 1)
+        out = CausalLMOutputWithPast(loss=loss)
+        return (loss, out) if return_outputs else loss
+
+
 # ─── Treinamento ──────────────────────────────────────────────────────────────
 
 def main() -> None:
@@ -161,7 +222,7 @@ def main() -> None:
         packing=False,
     )
 
-    trainer = SFTTrainer(
+    trainer = _ChunkedLMHeadTrainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset,
