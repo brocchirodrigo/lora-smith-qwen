@@ -140,7 +140,7 @@ run: $(MODEL_GGUF) $(MODEL_LORA)
 	$(LLAMA_BIN)/llama-cli \
 		--model $(MODEL_GGUF) \
 		--lora $(MODEL_LORA) \
-		--interactive \
+		--conversation \
 		--color \
 		-c 4096 \
 		-t $(CPU_THREADS) \
