@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     train_iters: int = 500
     cpu_threads: int = 6
 
+    hf_token: str = ""
+    hf_push_repo: str = ""  # ex: "seu-usuario/nome-do-modelo"
+
     @property
     def system_prompt(self) -> str:
         return _load_prompts().get("system", "").strip()

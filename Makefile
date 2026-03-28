@@ -28,10 +28,14 @@ MODEL_HF_ID   ?= Qwen/Qwen3.5-9B
 MODEL_REPO_ID ?= unsloth/Qwen3.5-9B-GGUF
 MODEL_FILENAME ?= Qwen3.5-9B-Q4_K_M.gguf
 
+MODEL_MERGED := models/merged
+HF_PUSH_REPO ?=
+HF_TOKEN     ?=
+
 MODEL_GGUF := $(MODEL_BASE)/$(MODEL_FILENAME)
 
-.PHONY: help setup download-base extract train export-lora run clean \
-        docker-build docker-extract docker-train docker-export-lora docker-run
+.PHONY: help setup download-base extract train export-lora push-hf run clean \
+        docker-build docker-extract docker-train docker-export-lora docker-push-hf docker-run
 
 # ─── Help ─────────────────────────────────────────────────────────────────────
 help:
@@ -45,6 +49,7 @@ help:
 	@echo "    make extract            Extrai posts do WordPress e gera JSONL"
 	@echo "    make train              Fine-tuning LoRA via Python (CUDA/MPS/CPU)"
 	@echo "    make export-lora        Converte adaptador HF → GGUF (llama.cpp)"
+	@echo "    make push-hf            Merge LoRA + base e publica no Hugging Face Hub"
 	@echo "    make run                Chat interativo com llama-cli + LoRA GGUF"
 	@echo "    make clean              Remove dados processados e adaptadores"
 	@echo ""
@@ -53,6 +58,7 @@ help:
 	@echo "    make docker-extract     Extrai posts dentro do container"
 	@echo "    make docker-train       Fine-tuning dentro do container (GPU)"
 	@echo "    make docker-export-lora Converte adaptador HF → GGUF no container"
+	@echo "    make docker-push-hf     Merge LoRA + push para HF Hub no container"
 	@echo "    make docker-run         Chat interativo no container"
 	@echo ""
 
@@ -119,6 +125,11 @@ export-lora: $(MODEL_LORA_HF)/adapter_model.safetensors
 		$(MODEL_LORA_HF)
 	@echo "✓ Adaptador GGUF em: $(MODEL_LORA)"
 
+# ─── Merge LoRA + push para Hugging Face Hub ─────────────────────────────────
+push-hf: $(MODEL_LORA_HF)/adapter_model.safetensors
+	@echo "→ Fundindo adaptador LoRA no modelo base e publicando no HF Hub..."
+	@uv run python -m src.merge
+
 # ─── Inferência interativa ────────────────────────────────────────────────────
 run: $(MODEL_GGUF) $(MODEL_LORA)
 	@echo "→ Iniciando chat interativo (llama-cli + LoRA GGUF)..."
@@ -134,7 +145,7 @@ run: $(MODEL_GGUF) $(MODEL_LORA)
 # ─── Limpeza ──────────────────────────────────────────────────────────────────
 clean:
 	@echo "→ Removendo dados processados e adaptadores LoRA..."
-	@rm -rf $(DATA_DIR)/* models/lora/* $(MODEL_LORA_HF)/*
+	@rm -rf $(DATA_DIR)/* models/lora/* $(MODEL_LORA_HF)/* $(MODEL_MERGED)
 	@echo "✓ Limpeza concluída."
 
 # ─── Guardas de arquivo ───────────────────────────────────────────────────────
@@ -179,6 +190,10 @@ docker-train:
 docker-export-lora:
 	@echo "→ Convertendo adaptador HF → GGUF no container..."
 	@$(DOCKER_RUN) make export-lora
+
+docker-push-hf:
+	@echo "→ Merge LoRA + push para HF Hub no container..."
+	@$(DOCKER_RUN) make push-hf
 
 docker-run:
 	@echo "→ Chat interativo no container..."

@@ -6,6 +6,22 @@ Treino via Python (PEFT/TRL) em qualquer ambiente — CUDA, Apple Silicon ou CPU
 
 ---
 
+## Execução rápida — ordem das etapas
+
+```bash
+make setup           # 1. instala dependências e compila llama.cpp
+make download-base   # 2. baixa o modelo GGUF base (~5.4 GB)
+make extract         # 3. extrai posts do WordPress e gera o dataset
+make train           # 4. fine-tuning LoRA (CUDA / MPS / CPU)
+make export-lora     # 5. converte adaptador HF → GGUF
+make run             # 6. chat interativo com o modelo treinado
+make push-hf         # 7. (opcional) merge + publicação no HF Hub — exige ≥ 16 GB RAM
+```
+
+Cada etapa depende da anterior. As etapas 1–3 só precisam ser refeitas se o ambiente ou o conteúdo do WordPress mudar.
+
+---
+
 ## Pré-requisitos
 
 ### Sistema
@@ -24,10 +40,12 @@ Treino via Python (PEFT/TRL) em qualquer ambiente — CUDA, Apple Silicon ou CPU
 
 | Ambiente | RAM mínima | Observações |
 |---|---|---|
-| Apple Silicon (M1/M2/M3) | 18 GB | Memória unificada. Treino em QLoRA 4-bit via MPS |
+| Apple Silicon (M1/M2/M3) | 8 GB | Memória unificada. Treino em QLoRA 4-bit via MPS |
 | Linux + CUDA | 8 GB VRAM | QLoRA 4-bit via bitsandbytes |
 | Linux CPU | 24 GB RAM | Treino em fp32, lento mas funcional |
 | Docker | 8 GB VRAM (GPU) | Requer Linux + CUDA. MPS não é suportado em container |
+
+> **`make push-hf` (merge):** requer ≥ 16 GB de RAM — o modelo 9B em bf16 completo ocupa ~18 GB. Em Macs com 8 GB, use `make run` para inferência local com o adaptador LoRA e `make docker-push-hf` para publicar a partir de uma máquina com mais memória.
 
 ### Espaço em disco
 
@@ -37,6 +55,7 @@ Treino via Python (PEFT/TRL) em qualquer ambiente — CUDA, Apple Silicon ou CPU
 | Modelo HF (treino, em cache) | ~18 GB |
 | Adaptador LoRA HF gerado | ~200 MB |
 | Adaptador LoRA GGUF gerado | ~50 MB |
+| Modelo fundido (merge, bf16) | ~18 GB |
 
 ---
 
@@ -49,7 +68,7 @@ Treino via Python (PEFT/TRL) em qualquer ambiente — CUDA, Apple Silicon ou CPU
 | HTTP / API WordPress | `httpx` (async) |
 | Validação | `pydantic` + `pydantic-settings` |
 | Limpeza HTML | `beautifulsoup4` |
-| Download de modelos | `huggingface-hub` |
+| Download / publicação de modelos | `huggingface-hub` |
 | Treino LoRA | `transformers` + `peft` + `trl` |
 | Quantização 4-bit | `bitsandbytes` |
 | Motor de inferência | `llama-cli` (llama.cpp, compilado localmente) |
@@ -68,7 +87,7 @@ lora-smith-qwen/
 ├── Makefile                   # Orquestrador do pipeline (local e Docker)
 ├── pyproject.toml
 ├── prompts/
-│   └── prompts.yaml           # System prompt e variações
+│   └── prompts.yaml           # System prompt restritivo
 ├── data/
 │   └── processed/
 │       ├── train.jsonl        # Dataset de treino (ChatML em JSONL)
@@ -76,7 +95,8 @@ lora-smith-qwen/
 ├── models/
 │   ├── base/                  # Modelo GGUF base (inferência)
 │   ├── lora-hf/               # Adaptador LoRA no formato HuggingFace
-│   └── lora/                  # Adaptador LoRA no formato GGUF (inferência)
+│   ├── lora/                  # Adaptador LoRA no formato GGUF (inferência)
+│   └── merged/                # Modelo fundido (base + LoRA), pronto para o HF Hub
 ├── scripts/
 │   └── llama.cpp/             # Repositório compilado no setup
 └── src/
@@ -86,9 +106,11 @@ lora-smith-qwen/
     │   └── wp_client.py       # Cliente WordPress REST API
     ├── services/
     │   ├── html_cleaner.py
-    │   └── formatter.py       # ChatMLFormatter
-    ├── extract.py             # Extração e formatação do dataset
-    └── train.py               # Fine-tuning LoRA (CUDA/MPS/CPU)
+    │   ├── formatter.py       # ChatMLFormatter — exemplos positivos (WP → resposta)
+    │   └── negative_generator.py  # Exemplos negativos (off-topic → recusa)
+    ├── extract.py             # Extração, formatação e mix de exemplos negativos
+    ├── train.py               # Fine-tuning LoRA (CUDA/MPS/CPU)
+    └── merge.py               # Merge LoRA + base e push para o Hugging Face Hub
 ```
 
 ---
@@ -111,6 +133,8 @@ cp .env.example .env
 | `MODEL_FILENAME` | `Qwen3.5-9B-Q4_K_M.gguf` | Arquivo GGUF local |
 | `TRAIN_ITERS` | `500` | Iterações de treino |
 | `CPU_THREADS` | `6` | Threads para compilação e inferência |
+| `HF_TOKEN` | *(vazio)* | Token HF com permissão de escrita — necessário para `make push-hf` |
+| `HF_PUSH_REPO` | *(vazio)* | Repositório de destino no HF Hub (ex: `seu-usuario/nome-do-modelo`) |
 
 O system prompt fica em `prompts/prompts.yaml` — edite diretamente sem tocar no `.env`.
 
@@ -144,7 +168,9 @@ make extract
 ```
 
 - Consulta a API REST do WordPress e pagina todos os posts publicados
-- Formata cada artigo em ChatML (system / user / assistant)
+- Formata cada artigo em ChatML (system / user / assistant) — **exemplos positivos**
+- Gera automaticamente exemplos **negativos** (off-topic → recusa) correspondendo a 25% do total de positivos (mínimo 30), cobrindo perguntas de conhecimento geral, programação, matemática, culinária, esportes, saúde e outros domínios
+- Embaralha positivos e negativos antes de dividir
 - Salva em `data/processed/train.jsonl` (95%) e `valid.jsonl` (5%)
 
 > Para sites privados, configure `WP_USERNAME` e `WP_APP_PASSWORD` no `.env`.
@@ -175,7 +201,22 @@ make export-lora
 - Converte `models/lora-hf/` para `models/lora/adapter.gguf` (~50 MB)
 - Usa `convert_lora_to_gguf.py` do llama.cpp
 
-### 6. Inferência interativa
+### 6. Publicação no Hugging Face Hub (opcional)
+
+```bash
+make push-hf
+```
+
+Requer `HF_TOKEN` e `HF_PUSH_REPO` no `.env`.
+
+- Carrega o modelo base em **bfloat16 completo** (sem quantização) — necessário para fundir os pesos
+- Funde o adaptador LoRA no modelo base com `merge_and_unload()` — o resultado é um modelo independente, sem dependência do adaptador
+- Salva o modelo fundido em `models/merged/`
+- Faz push para o HF Hub como repositório **privado**
+
+> **Hardware:** o merge requer ~18 GB de RAM livre (o modelo 9B em bf16 completo). Em máquinas com pouca memória, prefira `make docker-push-hf`.
+
+### 7. Inferência interativa
 
 ```bash
 make run
@@ -213,6 +254,7 @@ make docker-build
 make docker-extract       # extrai posts → data/processed/
 make docker-train         # treina LoRA → models/lora-hf/
 make docker-export-lora   # converte → models/lora/adapter.gguf
+make docker-push-hf       # merge + push para o HF Hub (requer HF_TOKEN e HF_PUSH_REPO)
 make docker-run           # chat interativo com GPU
 ```
 
@@ -224,7 +266,21 @@ make docker-run           # chat interativo com GPU
 make clean
 ```
 
-Remove `data/processed/`, `models/lora/` e `models/lora-hf/`. Mantém o modelo GGUF base e o cache HuggingFace intactos.
+Remove `data/processed/`, `models/lora/`, `models/lora-hf/` e `models/merged/`. Mantém o modelo GGUF base e o cache HuggingFace intactos.
+
+---
+
+## Restrição absoluta de escopo
+
+O modelo é treinado para responder **exclusivamente** com base no conteúdo extraído do WordPress. Qualquer pergunta fora desse escopo recebe uma recusa explícita.
+
+Isso é garantido por dois mecanismos combinados:
+
+1. **System prompt restritivo** (`prompts/prompts.yaml`): instrui o modelo a nunca usar conhecimento externo e a listar categorias proibidas explicitamente (programação genérica, matemática, culinária, saúde etc.)
+
+2. **Exemplos negativos no dataset**: durante o `make extract`, são gerados automaticamente exemplos de perguntas off-topic pareadas com respostas de recusa variadas (em pt-BR e en). O modelo aprende a recusar — não apenas a responder no estilo correto.
+
+Para ajustar o comportamento de recusa, edite `prompts/prompts.yaml` (system prompt) e `src/services/negative_generator.py` (banco de perguntas e frases de recusa).
 
 ---
 
@@ -232,5 +288,6 @@ Remove `data/processed/`, `models/lora/` e `models/lora-hf/`. Mantém o modelo G
 
 - **Por que GGUF para inferência?** O `llama-cli` roda em qualquer plataforma (macOS, Linux, Windows, Docker) sem dependências de Python ou CUDA. O `adapter.gguf` é carregado em runtime junto ao modelo base, sem fundir os pesos.
 - **Por que o treino não usa llama-finetune?** O Qwen3.5 é uma arquitetura híbrida SSM+Transformer (Gated Delta Net). O `llama-finetune` não suporta backward pass para camadas SSM — o treino via Python+PEFT contorna essa limitação.
+- **Merge vs. adaptador:** `make push-hf` funde os pesos LoRA no modelo base — o resultado não precisa do adaptador para rodar. `make run` usa o adaptador separado via llama.cpp, o que é mais leve localmente.
 - **Cache HuggingFace:** o modelo de treino (~18 GB) fica em `~/.cache/huggingface/`. Para liberar disco: `huggingface-cli delete-cache`.
 - **Tamanho do adaptador:** o LoRA treina apenas 43M de 9B parâmetros (0.48%). O `adapter.gguf` resultante tem ~50 MB.

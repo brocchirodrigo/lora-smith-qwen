@@ -86,10 +86,11 @@ def load_model_and_tokenizer(device: str):
             print(f"  → Modo: float16 (CUDA, VRAM cap: {CUDA_MAX_MEMORY})")
 
     elif device == "mps":
-        # QLoRA 4-bit já limita o modelo a ~4.5 GB de memória unificada.
-        # set_per_process_memory_fraction não é aplicado aqui pois o bitsandbytes
-        # carrega parcialmente em bf16 durante a quantização, causando OOM falso.
-        # A restrição de recursos vem do QLoRA + dataloader_num_workers=0.
+        # QLoRA 4-bit limita o modelo a ~4.5 GB de memória unificada.
+        # Em Macs com 8 GB, o sistema reserva ~1-2 GB → sobram ~2-3 GB para
+        # ativações e estados do otimizador LoRA. max_length=512 é obrigatório.
+        # set_per_process_memory_fraction não é aplicado durante o carregamento
+        # pois o bitsandbytes carrega parcialmente em bf16, causando OOM falso.
         from transformers import BitsAndBytesConfig
         bnb = BitsAndBytesConfig(
             load_in_4bit=True,
@@ -98,7 +99,7 @@ def load_model_and_tokenizer(device: str):
             bnb_4bit_use_double_quant=True,
         )
         load_kwargs.update({"quantization_config": bnb, "device_map": {"": "mps"}})
-        print("  → Modo: QLoRA 4-bit (Apple Silicon MPS)")
+        print("  → Modo: QLoRA 4-bit (Apple Silicon MPS, conservador para 8 GB)")
 
     else:
         # CPU: limita threads para não saturar todos os núcleos
@@ -143,11 +144,16 @@ def main() -> None:
 
     use_bf16 = device in ("cuda", "mps")
 
+    # Em MPS com 8 GB: acumula mais passos para compensar o batch pequeno
+    # e usar use_reentrant=False reduz o pico de memória no backward.
+    grad_accum = 8 if device == "mps" else 4
+    gc_kwargs = {"use_reentrant": False} if device == "mps" else {}
+
     training_args = SFTConfig(
         output_dir=str(LORA_HF_DIR),
         max_steps=settings.train_iters,
         per_device_train_batch_size=1,
-        gradient_accumulation_steps=4,
+        gradient_accumulation_steps=grad_accum,
         learning_rate=1e-4,
         lr_scheduler_type="cosine",
         warmup_steps=10,
@@ -155,15 +161,16 @@ def main() -> None:
         save_steps=100,
         save_total_limit=2,
         gradient_checkpointing=True,
+        gradient_checkpointing_kwargs=gc_kwargs,
         bf16=use_bf16,
         fp16=False,
         report_to="none",
         dataloader_pin_memory=(device == "cuda"),
-        dataloader_num_workers=0,  # evita processos paralelos extras
+        dataloader_num_workers=0,
         eval_strategy="steps" if valid_dataset else "no",
         eval_steps=100 if valid_dataset else None,
         dataset_text_field="text",
-        max_length=1024,
+        max_length=512,   # 512 é o limite seguro para 8 GB de memória unificada
         packing=False,
     )
 
