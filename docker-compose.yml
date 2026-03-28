@@ -1,0 +1,16 @@
+services:
+  trainer:
+    build: .
+    image: lora-smith-qwen
+    volumes:
+      - ./models:/app/models
+      - ./data:/app/data
+      - ./prompts:/app/prompts
+    env_file: .env
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]

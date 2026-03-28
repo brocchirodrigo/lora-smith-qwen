@@ -1,0 +1,53 @@
+# ─── Ambiente Python ─────────────────────────────────────────────────────────
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# ─── Variáveis de ambiente (NUNCA commitar) ───────────────────────────────────
+.env
+
+# ─── Dados gerados ────────────────────────────────────────────────────────────
+data/processed/
+data/raw/
+tmp/
+
+# ─── Modelos e pesos (arquivos pesados) ───────────────────────────────────────
+# Padrões por extensão (catch-all, onde quer que estejam)
+*.gguf
+*.safetensors
+*.bin
+*.pt
+*.pth
+*.ckpt
+*.h5
+
+# Diretórios de modelos
+models/base/
+models/lora/
+models/lora-hf/
+
+# Cache HuggingFace local (pode aparecer dentro de models/)
+**/.cache/
+
+# ─── scripts/ (gerado pelo make setup — clona e compila llama.cpp) ───────────
+scripts/
+
+# ─── Logs de treinamento ──────────────────────────────────────────────────────
+logs/
+runs/
+wandb/
+outputs/
+checkpoints/
+
+# ─── Claude Code ──────────────────────────────────────────────────────────────
+.claude/
+
+# ─── IDE ─────────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.DS_Store

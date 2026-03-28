@@ -1,0 +1,17 @@
+# Modelos e dados pesados — montados como volume em runtime
+models/
+data/
+
+# llama.cpp — clonado e compilado no docker build
+scripts/
+
+# Ambiente virtual — recriado no build
+.venv/
+
+# Artefatos locais
+tmp/
+__pycache__/
+*.pyc
+*.pyo
+.env
+.claude/
