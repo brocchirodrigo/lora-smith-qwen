@@ -161,7 +161,7 @@ def main() -> None:
         eval_strategy="steps" if valid_dataset else "no",
         eval_steps=100 if valid_dataset else None,
         dataset_text_field="text",
-        max_length=2048,
+        max_length=1024,
         packing=False,
     )
 
