@@ -9,6 +9,7 @@ Uso:
 
 import asyncio
 import json
+import random
 from pathlib import Path
 
 from rich.console import Console
@@ -17,6 +18,7 @@ from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 from src.config.settings import settings
 from src.infrastructure.wp_client import WordPressClient
 from src.services.formatter import ChatMLFormatter
+from src.services.negative_generator import NegativeExampleGenerator
 
 console = Console()
 
@@ -35,6 +37,7 @@ async def main() -> None:
 
     client = WordPressClient(settings)
     formatter = ChatMLFormatter(settings)
+    neg_generator = NegativeExampleGenerator(settings)
 
     total_posts = 0
     skipped = 0
@@ -62,9 +65,17 @@ async def main() -> None:
 
             entries.append(entry)
 
-    n_valid = max(1, int(len(entries) * VALID_SPLIT))
-    valid_entries = entries[:n_valid]
-    train_entries = entries[n_valid:]
+    # Gera exemplos negativos: 25% do total de positivos, mínimo 30
+    n_negatives = max(30, int(len(entries) * 0.25))
+    negative_entries = neg_generator.generate(n_negatives)
+    console.print(f"  Exemplos negativos gerados: [bold yellow]{n_negatives}[/bold yellow]")
+
+    all_entries = entries + negative_entries
+    random.shuffle(all_entries)
+
+    n_valid = max(1, int(len(all_entries) * VALID_SPLIT))
+    valid_entries = all_entries[:n_valid]
+    train_entries = all_entries[n_valid:]
 
     def write_jsonl(path: Path, items: list[str]) -> None:
         with path.open("w", encoding="utf-8") as f:
