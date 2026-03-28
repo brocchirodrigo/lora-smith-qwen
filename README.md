@@ -8,6 +8,16 @@ Treino via Python (PEFT/TRL) em qualquer ambiente — CUDA, Apple Silicon ou CPU
 
 ## Execução rápida — ordem das etapas
 
+Para rodar o pipeline completo de uma vez:
+
+```bash
+make all
+```
+
+Executa em sequência: `clean → setup → download-base → extract → train → export → ollama-create → push`.
+
+Ou etapa por etapa:
+
 ```bash
 make setup           # 1. instala dependências e compila llama.cpp
 make download-base   # 2. baixa o modelo GGUF base (~1.5 GB)
