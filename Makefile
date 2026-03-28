@@ -141,7 +141,7 @@ run: $(MODEL_GGUF) $(MODEL_LORA)
 		--model $(MODEL_GGUF) \
 		--lora $(MODEL_LORA) \
 		--conversation \
-		--color \
+		--color on \
 		-c 4096 \
 		-t $(CPU_THREADS) \
 		-sys "$$SYS"
