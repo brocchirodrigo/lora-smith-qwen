@@ -136,6 +136,8 @@ cp .env.example .env
 | `CPU_THREADS` | `6` | Threads para compilação e inferência |
 | `HF_TOKEN` | *(vazio)* | Token HF com permissão de escrita — necessário para `make push` |
 | `HF_PUSH_REPO` | *(vazio)* | Repositório de destino no HF Hub (ex: `seu-usuario/nome-do-modelo`) |
+| `OLLAMA_MODEL` | *(vazio)* | Opcional — nome do modelo no Ollama (ex: `usuario/nome`). Se vazio, etapas ollama são puladas |
+| `OLLAMA_API_KEY` | *(vazio)* | API key para push no Ollama — [ollama.com/settings/api-keys](https://ollama.com/settings/api-keys). Se vazio, `push-ollama` é pulado |
 
 O system prompt e a persona do modelo ficam em `prompts/prompts.yaml` — edite diretamente sem tocar no `.env`.
 
@@ -221,30 +223,48 @@ make run
 - System prompt carregado automaticamente de `prompts/prompts.yaml`
 - O modelo abre o chat com uma saudação e aguarda a pergunta
 
-### 7. Publicação no Hugging Face Hub (opcional)
+### 7. Publicação (opcional)
 
 ```bash
 make push
 ```
 
-Requer `HF_TOKEN` e `HF_PUSH_REPO` no `.env`.
+Publica em todos os destinos configurados em sequência:
 
-Publica dois formatos no mesmo repositório:
-- **safetensors** (`push-hf`) — para fine-tuning adicional via Python
-- **GGUF Q4_K_M** (`push-gguf`) — para download direto no LM Studio
+1. **HF Hub safetensors** — requer `HF_TOKEN` + `HF_PUSH_REPO`
+2. **HF Hub GGUF** — mesmo repositório, arquivo `merged-q4km.gguf`
+3. **Ollama** — pulado automaticamente se `OLLAMA_MODEL` ou `OLLAMA_API_KEY` estiverem vazios
 
 ```
-seu-usuario/nome-do-modelo/
-├── model.safetensors     ← transformers / fine-tuning adicional
+seu-usuario/nome-do-modelo/   ← HF Hub
+├── model.safetensors
 ├── tokenizer.json
 ├── config.json
-└── merged-q4km.gguf      ← LM Studio / llama.cpp standalone
+└── merged-q4km.gguf
+
+ollama.com/usuario/nome       ← Ollama
 ```
 
-Para publicar apenas um dos formatos:
+Para publicar destinos individualmente:
 ```bash
-make push-hf    # apenas safetensors (requer make merge)
-make push-gguf  # apenas GGUF (requer make export)
+make push-hf        # apenas safetensors no HF (requer make merge)
+make push-gguf      # apenas GGUF no HF (requer make export)
+make ollama-create  # registra localmente no Ollama
+make push-ollama    # publica no ollama.com
+```
+
+### 8. Ollama (opcional)
+
+Requer [ollama instalado](https://ollama.com/download), `OLLAMA_MODEL` e `OLLAMA_API_KEY` definidos no `.env`. Qualquer um ausente faz a etapa ser pulada automaticamente.
+
+```bash
+# .env:
+# OLLAMA_MODEL=usuario/nome-do-modelo
+# OLLAMA_API_KEY=sua-api-key  ← https://ollama.com/settings/api-keys
+
+make ollama-create              # gera Modelfile + registra localmente
+ollama run usuario/nome-do-modelo  # testa local
+make push-ollama                # publica no ollama.com
 ```
 
 ---
@@ -288,7 +308,7 @@ make docker-run       # chat interativo com GPU
 make clean
 ```
 
-Remove `data/processed/`, `models/lora/`, `models/lora-hf/` e `models/merged/`. Mantém o modelo GGUF base e o cache HuggingFace intactos.
+Remove tudo: dataset, adapters, modelos fundidos, GGUF base e cache HuggingFace. Após o `make clean`, o próximo ciclo começa do `make download-base`.
 
 ---
 

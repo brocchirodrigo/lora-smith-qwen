@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     model_hf_id: str = "Qwen/Qwen3.5-2B"
     model_filename: str = "Qwen3.5-2B-Q4_K_M.gguf"
 
-    train_iters: int = 500
+    train_iters: int = 1000
     cpu_threads: int = 6
 
     hf_token: str = ""

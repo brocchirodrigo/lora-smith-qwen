@@ -31,12 +31,13 @@ MODEL_FILENAME ?= Qwen3.5-2B-Q4_K_M.gguf
 MODEL_MERGED      := models/merged
 MODEL_MERGED_F16  := models/merged-f16.gguf
 MODEL_MERGED_Q4   := models/merged-q4km.gguf
-HF_PUSH_REPO ?=
-HF_TOKEN     ?=
+HF_PUSH_REPO  ?=
+HF_TOKEN      ?=
+OLLAMA_MODEL  ?=
 
 MODEL_GGUF := $(MODEL_BASE)/$(MODEL_FILENAME)
 
-.PHONY: help setup download-base extract train merge export export-lora export-merged-gguf push push-hf push-gguf run clean \
+.PHONY: help setup download-base extract train merge export export-lora export-merged-gguf push push-hf push-gguf ollama-create push-ollama run clean \
         docker-build docker-extract docker-train docker-export docker-export-lora docker-push docker-push-hf docker-run
 
 # ─── Help ─────────────────────────────────────────────────────────────────────
@@ -55,6 +56,8 @@ help:
 	@echo "    make push               Publica safetensors + GGUF no Hugging Face Hub"
 	@echo "    make push-hf            Apenas safetensors (requer make merge)"
 	@echo "    make push-gguf          Apenas GGUF (requer make export)"
+	@echo "    make ollama-create      Registra modelo no Ollama local (requer make export)"
+	@echo "    make push-ollama        Publica modelo no ollama.com"
 	@echo "    make run                Chat interativo com llama-cli + LoRA GGUF"
 	@echo "    make clean              Remove dados processados e adaptadores"
 	@echo ""
@@ -75,9 +78,6 @@ setup:
 	@echo "→ Criando ambiente virtual e instalando dependências Python com uv..."
 	@uv venv --quiet --seed 2>/dev/null || true
 	@uv pip install -e . --quiet
-
-	@echo "→ Pré-compilando system prompt..."
-	@uv run python -c "import yaml; open('prompts/system_prompt.txt', 'w').write(yaml.safe_load(open('prompts/prompts.yaml'))['system'].strip())"
 
 	@echo "→ Clonando llama.cpp (se necessário)..."
 	@if [ ! -d "$(LLAMA_DIR)" ]; then \
@@ -108,7 +108,7 @@ download-base:
 	@uv run python -c "\
 from huggingface_hub import hf_hub_download; \
 import os; \
-repo = os.environ.get('MODEL_REPO_ID', 'unsloth/Qwen3.5-9B-GGUF'); \
+repo = os.environ.get('MODEL_REPO_ID', 'unsloth/Qwen3.5-2B-GGUF'); \
 fname = '$(MODEL_FILENAME)'; \
 hf_hub_download(repo, fname, local_dir='$(MODEL_BASE)'); \
 print('✓ Modelo GGUF salvo em: $(MODEL_GGUF)')"
@@ -153,6 +153,7 @@ push-hf: $(MODEL_MERGED)/config.json
 push: $(MODEL_MERGED)/config.json $(MODEL_MERGED_Q4)
 	@$(MAKE) --no-print-directory push-hf
 	@$(MAKE) --no-print-directory push-gguf
+	@$(MAKE) --no-print-directory push-ollama
 
 # ─── Inferência interativa ────────────────────────────────────────────────────
 run: $(MODEL_GGUF) $(MODEL_LORA)
@@ -194,6 +195,26 @@ api.upload_file( \
     token='$(HF_TOKEN)', \
 ); \
 print(f'✓ Disponível em: https://huggingface.co/$(HF_PUSH_REPO)/blob/main/{fname}')"
+
+# ─── Ollama ───────────────────────────────────────────────────────────────────
+ollama-create: $(MODEL_MERGED_Q4)
+	@if [ -z "$(OLLAMA_MODEL)" ]; then echo "  → OLLAMA_MODEL não definido, pulando ollama-create."; exit 0; fi
+	@if ! command -v ollama >/dev/null 2>&1; then echo "  → ollama não instalado, pulando ollama-create."; exit 0; fi
+	@echo "→ Gerando Modelfile..."
+	@SYS=$$(uv run python -c "import yaml; print(yaml.safe_load(open('prompts/prompts.yaml'))['system'].strip())") && \
+	printf 'FROM ./%s\n\nSYSTEM """%s"""\n\nPARAMETER num_ctx 4096\nPARAMETER temperature 0.7\n' \
+		"$(MODEL_MERGED_Q4)" "$$SYS" > Modelfile
+	@echo "→ Registrando modelo no Ollama local: $(OLLAMA_MODEL)..."
+	@ollama create $(OLLAMA_MODEL) -f Modelfile
+	@echo "✓ Pronto. Para testar: ollama run $(OLLAMA_MODEL)"
+
+push-ollama:
+	@if [ -z "$(OLLAMA_MODEL)" ]; then echo "  → OLLAMA_MODEL não definido, pulando push-ollama."; exit 0; fi
+	@if [ -z "$(OLLAMA_API_KEY)" ]; then echo "  → OLLAMA_API_KEY não definida, pulando push-ollama."; exit 0; fi
+	@if ! command -v ollama >/dev/null 2>&1; then echo "  → ollama não instalado, pulando push-ollama."; exit 0; fi
+	@echo "→ Publicando no Ollama: $(OLLAMA_MODEL)..."
+	@OLLAMA_API_KEY=$(OLLAMA_API_KEY) ollama push $(OLLAMA_MODEL)
+	@echo "✓ Disponível em: https://ollama.com/$(OLLAMA_MODEL)"
 
 # ─── Limpeza ──────────────────────────────────────────────────────────────────
 clean:
