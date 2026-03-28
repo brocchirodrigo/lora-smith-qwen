@@ -142,6 +142,8 @@ def main() -> None:
         output_dir=str(LORA_HF_DIR),
         max_steps=settings.train_iters,
         per_device_train_batch_size=1,
+        per_device_eval_batch_size=1,
+        eval_accumulation_steps=1,
         gradient_accumulation_steps=grad_accum,
         learning_rate=1e-4,
         lr_scheduler_type="cosine",

@@ -25,7 +25,7 @@ console = Console()
 OUTPUT_DIR  = Path("data/processed")
 TRAIN_FILE  = OUTPUT_DIR / "train.jsonl"
 VALID_FILE  = OUTPUT_DIR / "valid.jsonl"
-VALID_SPLIT = 0.05
+VALID_SPLIT = 0.10
 
 
 async def main() -> None:
