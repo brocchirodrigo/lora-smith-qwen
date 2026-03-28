@@ -26,7 +26,8 @@ LORA_HF_DIR  = Path("models/lora-hf")
 MERGED_DIR   = Path("models/merged")
 
 
-def main() -> None:
+def merge_local() -> None:
+    """Funde o adaptador LoRA no modelo base e salva em models/merged (sem push)."""
     if not LORA_HF_DIR.exists():
         raise FileNotFoundError(f"Adaptador LoRA não encontrado em {LORA_HF_DIR}. Execute: make train")
 
@@ -41,14 +42,7 @@ def main() -> None:
         )
     print(f"  → RAM disponível: {ram_available_gb:.1f} GB de {ram_total_gb:.1f} GB — OK")
 
-    if not settings.hf_token:
-        raise ValueError("HF_TOKEN não definido no .env")
-
-    if not settings.hf_push_repo:
-        raise ValueError("HF_PUSH_REPO não definido no .env (ex: seu-usuario/nome-do-modelo)")
-
     print(f"\n→ Carregando modelo base: {settings.model_hf_id}")
-    
     model = AutoModelForCausalLM.from_pretrained(
         settings.model_hf_id,
         torch_dtype=torch.bfloat16,
@@ -69,24 +63,59 @@ def main() -> None:
     tokenizer.save_pretrained(str(MERGED_DIR))
     print(f"  ✓ Modelo salvo localmente em {MERGED_DIR}")
 
-    print(f"\n→ Fazendo push para o Hugging Face Hub: {settings.hf_push_repo}")
+
+def push_to_hub() -> None:
+    """Publica models/merged no Hugging Face Hub (sem re-mergear)."""
+    if not (MERGED_DIR / "config.json").exists():
+        raise FileNotFoundError(f"Modelo fundido não encontrado em {MERGED_DIR}. Execute: make merge")
+
+    if not settings.hf_token:
+        raise ValueError("HF_TOKEN não definido no .env")
+
+    if not settings.hf_push_repo:
+        raise ValueError("HF_PUSH_REPO não definido no .env (ex: seu-usuario/nome-do-modelo)")
+
+    from transformers import AutoModelForCausalLM as _M, AutoTokenizer as _T
+    from huggingface_hub import HfApi
+    model = _M.from_pretrained(str(MERGED_DIR), torch_dtype=torch.bfloat16, low_cpu_mem_usage=True)
+    tokenizer = _T.from_pretrained(str(MERGED_DIR))
+
+    api = HfApi()
+    print(f"\n→ Limpando repositório existente: {settings.hf_push_repo}")
     try:
-        model.push_to_hub(
-            settings.hf_push_repo,
-            token=settings.hf_token,
-            private=True,
+        api.delete_repo(repo_id=settings.hf_push_repo, token=settings.hf_token, repo_type="model")
+    except Exception:
+        pass
+    api.create_repo(repo_id=settings.hf_push_repo, token=settings.hf_token, private=False, exist_ok=True)
+
+    print(f"→ Publicando no Hugging Face Hub: {settings.hf_push_repo}")
+    try:
+        model.push_to_hub(settings.hf_push_repo, token=settings.hf_token, private=False)
+        tokenizer.push_to_hub(settings.hf_push_repo, token=settings.hf_token, private=True)
+
+        readme_content = Path("HF_README.md").read_text(encoding="utf-8").format(
+            repo_id=settings.hf_push_repo,
+            base_model=settings.model_hf_id,
         )
-        tokenizer.push_to_hub(
-            settings.hf_push_repo,
+        api.upload_file(
+            path_or_fileobj=readme_content.encode("utf-8"),
+            path_in_repo="README.md",
+            repo_id=settings.hf_push_repo,
             token=settings.hf_token,
-            private=True,
         )
         print(f"\n✓ Modelo publicado em: https://huggingface.co/{settings.hf_push_repo}")
     except Exception as exc:
         print(f"\n⚠ Push falhou: {exc}")
-        print(f"  O modelo está salvo localmente em {MERGED_DIR.resolve()}")
-        print("  Para tentar novamente: make push-hf")
         raise
+
+
+def main() -> None:
+    import sys
+    cmd = sys.argv[1] if len(sys.argv) > 1 else "merge"
+    if cmd == "push":
+        push_to_hub()
+    else:
+        merge_local()
 
 
 if __name__ == "__main__":

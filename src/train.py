@@ -115,10 +115,10 @@ def main() -> None:
     model, tokenizer = load_model_and_tokenizer(device)
 
     lora_config = LoraConfig(
-        r=16,
-        lora_alpha=32,
-        target_modules=["q_proj", "v_proj"],
-        lora_dropout=0.10,
+        r=32,
+        lora_alpha=64,
+        target_modules=["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"],
+        lora_dropout=0.05,
         bias="none",
         task_type=TaskType.CAUSAL_LM,
     )
@@ -161,7 +161,7 @@ def main() -> None:
         eval_strategy="steps" if valid_dataset else "no",
         eval_steps=100 if valid_dataset else None,
         dataset_text_field="text",
-        max_length=512,
+        max_length=2048,
         packing=False,
     )
 

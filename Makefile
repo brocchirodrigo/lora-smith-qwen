@@ -28,14 +28,16 @@ MODEL_HF_ID   ?= Qwen/Qwen3.5-2B
 MODEL_REPO_ID ?= unsloth/Qwen3.5-2B-GGUF
 MODEL_FILENAME ?= Qwen3.5-2B-Q4_K_M.gguf
 
-MODEL_MERGED := models/merged
+MODEL_MERGED      := models/merged
+MODEL_MERGED_F16  := models/merged-f16.gguf
+MODEL_MERGED_Q4   := models/merged-q4km.gguf
 HF_PUSH_REPO ?=
 HF_TOKEN     ?=
 
 MODEL_GGUF := $(MODEL_BASE)/$(MODEL_FILENAME)
 
-.PHONY: help setup download-base extract train export-lora push-hf run clean \
-        docker-build docker-extract docker-train docker-export-lora docker-push-hf docker-run
+.PHONY: help setup download-base extract train merge export export-lora export-merged-gguf push push-hf push-gguf run clean \
+        docker-build docker-extract docker-train docker-export docker-export-lora docker-push docker-push-hf docker-run
 
 # ─── Help ─────────────────────────────────────────────────────────────────────
 help:
@@ -48,8 +50,11 @@ help:
 	@echo "    make download-base      Baixa o modelo GGUF base do Hugging Face"
 	@echo "    make extract            Extrai posts do WordPress e gera JSONL"
 	@echo "    make train              Fine-tuning LoRA via Python (CUDA/MPS/CPU)"
-	@echo "    make export-lora        Converte adaptador HF → GGUF (llama.cpp)"
-	@echo "    make push-hf            Merge LoRA + base e publica no Hugging Face Hub"
+	@echo "    make merge              Funde LoRA no modelo base (salva local em models/merged)"
+	@echo "    make export             export-lora + merge + export-merged-gguf"
+	@echo "    make push               Publica safetensors + GGUF no Hugging Face Hub"
+	@echo "    make push-hf            Apenas safetensors (requer make merge)"
+	@echo "    make push-gguf          Apenas GGUF (requer make export)"
 	@echo "    make run                Chat interativo com llama-cli + LoRA GGUF"
 	@echo "    make clean              Remove dados processados e adaptadores"
 	@echo ""
@@ -57,8 +62,8 @@ help:
 	@echo "    make docker-build       Constrói a imagem Docker"
 	@echo "    make docker-extract     Extrai posts dentro do container"
 	@echo "    make docker-train       Fine-tuning dentro do container (GPU)"
-	@echo "    make docker-export-lora Converte adaptador HF → GGUF no container"
-	@echo "    make docker-push-hf     Merge LoRA + push para HF Hub no container"
+	@echo "    make docker-export      export-lora + merge + export-merged-gguf no container"
+	@echo "    make docker-push        Publica safetensors + GGUF no HF Hub no container"
 	@echo "    make docker-run         Chat interativo no container"
 	@echo ""
 
@@ -128,15 +133,31 @@ export-lora: $(MODEL_LORA_HF)/adapter_model.safetensors
 		$(MODEL_LORA_HF)
 	@echo "✓ Adaptador GGUF em: $(MODEL_LORA)"
 
-# ─── Merge LoRA + push para Hugging Face Hub ─────────────────────────────────
-push-hf: $(MODEL_LORA_HF)/adapter_model.safetensors
-	@echo "→ Fundindo adaptador LoRA no modelo base e publicando no HF Hub..."
-	@uv run python -m src.merge
+# ─── Merge LoRA no modelo base (local) ───────────────────────────────────────
+merge: $(MODEL_LORA_HF)/adapter_model.safetensors
+	@echo "→ Fundindo adaptador LoRA no modelo base..."
+	@uv run python -m src.merge merge
+
+# ─── Export: adapter GGUF (llama-cli) + merge local + GGUF fundido (LM Studio)
+export: $(MODEL_LORA_HF)/adapter_model.safetensors
+	@$(MAKE) --no-print-directory export-lora
+	@$(MAKE) --no-print-directory merge
+	@$(MAKE) --no-print-directory export-merged-gguf
+
+# ─── Push safetensors para o Hugging Face Hub ────────────────────────────────
+push-hf: $(MODEL_MERGED)/config.json
+	@echo "→ Publicando safetensors no HF Hub..."
+	@uv run python -m src.merge push
+
+# ─── Push GGUF + safetensors para o Hugging Face Hub ─────────────────────────
+push: $(MODEL_MERGED)/config.json $(MODEL_MERGED_Q4)
+	@$(MAKE) --no-print-directory push-hf
+	@$(MAKE) --no-print-directory push-gguf
 
 # ─── Inferência interativa ────────────────────────────────────────────────────
 run: $(MODEL_GGUF) $(MODEL_LORA)
 	@echo "→ Iniciando chat interativo (llama-cli + LoRA GGUF)..."
-	@SYS=$$(cat prompts/system_prompt.txt) && \
+	@SYS=$$(uv run python -c "import yaml; print(yaml.safe_load(open('prompts/prompts.yaml'))['system'].strip())") && \
 	$(LLAMA_BIN)/llama-cli \
 		--model $(MODEL_GGUF) \
 		--lora $(MODEL_LORA) \
@@ -144,7 +165,35 @@ run: $(MODEL_GGUF) $(MODEL_LORA)
 		--color on \
 		-c 4096 \
 		-t $(CPU_THREADS) \
-		-sys "$$SYS"
+		-sys "$$SYS" \
+		--prompt "<|im_start|>assistant\nOlá, como posso te ajudar?<|im_end|>"
+
+# ─── Export GGUF do modelo fundido (para LM Studio) ─────────────────────────
+export-merged-gguf: $(MODEL_MERGED)/config.json
+	@echo "→ Convertendo modelo fundido para GGUF F16..."
+	@uv run python $(LLAMA_DIR)/convert_hf_to_gguf.py \
+		$(MODEL_MERGED) \
+		--outfile $(MODEL_MERGED_F16) \
+		--outtype f16
+	@echo "→ Quantizando para Q4_K_M..."
+	@$(LLAMA_DIR)/build/tools/quantize $(MODEL_MERGED_F16) $(MODEL_MERGED_Q4) Q4_K_M
+	@rm -f $(MODEL_MERGED_F16)
+	@echo "✓ GGUF em: $(MODEL_MERGED_Q4)"
+
+push-gguf: $(MODEL_MERGED_Q4)
+	@echo "→ Publicando GGUF no Hugging Face Hub: $(HF_PUSH_REPO)..."
+	@uv run python -c "\
+from huggingface_hub import HfApi; \
+import os; \
+api = HfApi(); \
+fname = '$(notdir $(MODEL_MERGED_Q4))'; \
+api.upload_file( \
+    path_or_fileobj='$(MODEL_MERGED_Q4)', \
+    path_in_repo=fname, \
+    repo_id='$(HF_PUSH_REPO)', \
+    token='$(HF_TOKEN)', \
+); \
+print(f'✓ Disponível em: https://huggingface.co/$(HF_PUSH_REPO)/blob/main/{fname}')"
 
 # ─── Limpeza ──────────────────────────────────────────────────────────────────
 clean:
@@ -169,6 +218,10 @@ $(MODEL_LORA_HF)/adapter_model.safetensors:
 	@echo "⚠  Adaptador HF não encontrado. Execute: make train"
 	@exit 1
 
+$(MODEL_MERGED)/config.json:
+	@echo "⚠  Modelo fundido não encontrado. Execute: make merge"
+	@exit 1
+
 # ─── Docker ───────────────────────────────────────────────────────────────────
 DOCKER_IMAGE := lora-smith-qwen
 DOCKER_RUN   := docker run --rm --gpus all \
@@ -191,12 +244,18 @@ docker-train:
 	@echo "→ Iniciando fine-tuning dentro do container (CUDA)..."
 	@$(DOCKER_RUN) make train
 
+docker-export:
+	@echo "→ Export completo (adapter GGUF + merge + GGUF fundido) no container..."
+	@$(DOCKER_RUN) make export
+
+docker-push:
+	@echo "→ Publicando safetensors + GGUF no HF Hub no container..."
+	@$(DOCKER_RUN) make push
+
 docker-export-lora:
-	@echo "→ Convertendo adaptador HF → GGUF no container..."
 	@$(DOCKER_RUN) make export-lora
 
 docker-push-hf:
-	@echo "→ Merge LoRA + push para HF Hub no container..."
 	@$(DOCKER_RUN) make push-hf
 
 docker-run:
