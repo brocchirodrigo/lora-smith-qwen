@@ -37,8 +37,19 @@ OLLAMA_MODEL  ?=
 
 MODEL_GGUF := $(MODEL_BASE)/$(MODEL_FILENAME)
 
-.PHONY: help setup download-base extract train merge export export-lora export-merged-gguf push push-hf push-gguf ollama-create push-ollama run clean \
+.PHONY: help setup download-base extract train merge export export-lora export-merged-gguf push push-hf push-gguf ollama-create push-ollama run clean all \
         docker-build docker-extract docker-train docker-export docker-export-lora docker-push docker-push-hf docker-run
+
+# ─── Pipeline completo ───────────────────────────────────────────────────────
+all:
+	@$(MAKE) --no-print-directory clean
+	@$(MAKE) --no-print-directory setup
+	@$(MAKE) --no-print-directory download-base
+	@$(MAKE) --no-print-directory extract
+	@$(MAKE) --no-print-directory train
+	@$(MAKE) --no-print-directory export
+	@$(MAKE) --no-print-directory ollama-create
+	@$(MAKE) --no-print-directory push
 
 # ─── Help ─────────────────────────────────────────────────────────────────────
 help:
