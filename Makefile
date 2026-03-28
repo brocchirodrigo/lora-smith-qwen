@@ -197,8 +197,9 @@ print(f'✓ Disponível em: https://huggingface.co/$(HF_PUSH_REPO)/blob/main/{fn
 
 # ─── Limpeza ──────────────────────────────────────────────────────────────────
 clean:
-	@echo "→ Removendo dados processados e adaptadores LoRA..."
-	@rm -rf $(DATA_DIR)/* models/lora/* $(MODEL_LORA_HF)/* $(MODEL_MERGED)
+	@echo "→ Removendo dados, adaptadores, modelos fundidos e cache HuggingFace..."
+	@rm -rf $(DATA_DIR)/* models/lora/* $(MODEL_LORA_HF)/* $(MODEL_MERGED) $(MODEL_MERGED_Q4) $(MODEL_BASE)/*
+	@huggingface-cli delete-cache --yes 2>/dev/null || true
 	@echo "✓ Limpeza concluída."
 
 # ─── Guardas de arquivo ───────────────────────────────────────────────────────
