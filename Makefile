@@ -244,6 +244,10 @@ $(MODEL_MERGED)/config.json:
 	@echo "⚠  Modelo fundido não encontrado. Execute: make merge"
 	@exit 1
 
+$(MODEL_MERGED_Q4):
+	@echo "⚠  GGUF fundido não encontrado. Execute: make export"
+	@exit 1
+
 # ─── Docker ───────────────────────────────────────────────────────────────────
 DOCKER_IMAGE := lora-smith-qwen
 DOCKER_RUN   := docker run --rm --gpus all \
@@ -284,5 +288,6 @@ docker-run:
 	@echo "→ Chat interativo no container..."
 	@docker run --rm -it --gpus all \
 		-v $(PWD)/models:/app/models \
+		-v $(PWD)/prompts:/app/prompts \
 		--env-file .env \
 		$(DOCKER_IMAGE) make run

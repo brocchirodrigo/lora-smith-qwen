@@ -190,7 +190,7 @@ make train
 - Aplica QLoRA 4-bit via `bitsandbytes`
 - Treina por 1000 iterações com `SFTTrainer`
 - LoRA aplicado em todas as camadas lineares (`q_proj`, `k_proj`, `v_proj`, `o_proj`, `gate_proj`, `up_proj`, `down_proj`) com rank 32 — necessário para memorizar conteúdo factual da base de conhecimento
-- Sequências de até 2048 tokens — garante que artigos longos não sejam truncados
+- Sequências de até 1024 tokens
 - Salva o adaptador em `models/lora-hf/`
 
 | Ambiente | Modo | Memória usada |
