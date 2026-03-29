@@ -97,7 +97,7 @@ setup:
 		echo "  llama.cpp já existe, pulando clone."; \
 	fi
 
-	@echo "→ Compilando llama-cli..."
+	@echo "→ Compilando llama-cli e llama-quantize..."
 	@if ! command -v cmake > /dev/null 2>&1; then \
 		if [ "$(OS_NAME)" = "Darwin" ]; then \
 			echo "✗ cmake não encontrado. Instale com: brew install cmake"; exit 1; \
@@ -108,7 +108,7 @@ setup:
 	@mkdir -p $(LLAMA_DIR)/build
 	@cd $(LLAMA_DIR)/build && \
 		cmake .. -DGGML_METAL=$(GGML_METAL) -DGGML_CUDA=$(GGML_CUDA) -DLLAMA_CURL=OFF && \
-		cmake --build . --config Release --target llama-cli -j$(CPU_THREADS)
+		cmake --build . --config Release --target llama-cli --target llama-quantize -j$(CPU_THREADS)
 
 	@echo ""
 	@echo "✓ Setup concluído! Próximo passo: make download-base"
