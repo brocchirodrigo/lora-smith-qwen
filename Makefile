@@ -180,8 +180,9 @@ run: $(MODEL_GGUF) $(MODEL_LORA)
 		--temp 0.6 \
 		--top-p 0.95 \
 		--top-k 20 \
-		--min-p 0.00 \
+		--min-p 0.05 \
 		--repeat-penalty 1.0 \
+		--chat-template-kwargs '{"enable_thinking":true}' \
 		-sys "$$SYS" \
 		--prompt "<|im_start|>assistant\nOlá, como posso te ajudar?<|im_end|>"
 

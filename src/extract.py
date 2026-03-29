@@ -65,12 +65,12 @@ async def main() -> None:
 
             entries.extend(post_entries)
 
-    n_negatives = max(40, int(len(entries) * 0.40))
+    n_negatives = max(40, int(len(entries) * 0.60))
     negative_entries = neg_generator.generate(n_negatives)
     console.print(f"  Exemplos negativos gerados: [bold yellow]{n_negatives}[/bold yellow]")
 
     all_entries = entries + negative_entries
-    random.shuffle(all_entries)
+    random.Random(42).shuffle(all_entries)
 
     n_valid = max(1, int(len(all_entries) * VALID_SPLIT))
     valid_entries = all_entries[:n_valid]

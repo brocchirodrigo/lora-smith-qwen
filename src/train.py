@@ -113,9 +113,9 @@ def main() -> None:
 
     lora_config = LoraConfig(
         r=16,
-        lora_alpha=16,
+        lora_alpha=32,
         target_modules=["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"],
-        lora_dropout=0.1,
+        lora_dropout=0.05,
         bias="none",
         task_type=TaskType.CAUSAL_LM,
     )
@@ -139,7 +139,6 @@ def main() -> None:
     steps_per_epoch = max(1, len(train_dataset) // effective_batch)
     target_steps = settings.train_epochs * steps_per_epoch
     max_steps = min(target_steps, settings.train_iters) if settings.train_iters > 0 else target_steps
-    warmup_steps = max(10, max_steps // 10)
     eval_steps = max(10, max_steps // 10)
     save_steps = eval_steps
     print(f"  Dataset: {len(train_dataset)} | Steps/época: {steps_per_epoch} | "
@@ -153,9 +152,10 @@ def main() -> None:
         per_device_eval_batch_size=1,
         eval_accumulation_steps=1,
         gradient_accumulation_steps=grad_accum,
-        learning_rate=1e-4,
+        learning_rate=5e-5,
+        weight_decay=0.01,
         lr_scheduler_type="cosine",
-        warmup_steps=warmup_steps,
+        warmup_ratio=0.1,
         logging_steps=10,
         save_steps=save_steps,
         save_total_limit=2,
@@ -168,8 +168,9 @@ def main() -> None:
         dataloader_num_workers=0,
         eval_strategy="steps" if valid_dataset else "no",
         eval_steps=eval_steps if valid_dataset else None,
+        seed=42,
         completion_only_loss=True,
-        max_length=2048,
+        max_length=1280,
         packing=False,
     )
 
@@ -194,15 +195,18 @@ def main() -> None:
     tokenizer.save_pretrained(str(LORA_HF_DIR))
 
     # generation_config.json — parâmetros recomendados para tarefas factuais/precisas.
+    # eos/pad_token_id: críticos para que o modelo pare de gerar no fim do turno.
     # Lido pelo Transformers e pelo LM Studio (safetensors).
     GenerationConfig(
         temperature=0.6,
         do_sample=True,
         top_p=0.95,
         top_k=20,
-        min_p=0.0,
+        min_p=0.05,
         repetition_penalty=1.0,
         max_new_tokens=2048,
+        eos_token_id=tokenizer.eos_token_id,
+        pad_token_id=tokenizer.pad_token_id,
     ).save_pretrained(str(LORA_HF_DIR))
 
     print(f"\n✓ Adaptador HF salvo em: {LORA_HF_DIR}")

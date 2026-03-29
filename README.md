@@ -200,10 +200,10 @@ make train
 
 - Baixa `Qwen/Qwen3.5-0.8B` do HuggingFace (~4 GB, fica em cache após o primeiro uso)
 - Aplica QLoRA 4-bit via `bitsandbytes` (CUDA) ou bfloat16 sem quantização (MPS/CPU)
-- Calcula automaticamente o número de steps com base em `TRAIN_EPOCHS` (padrão: 3 épocas) e o tamanho do dataset — `TRAIN_ITERS` funciona como hard cap
-- LoRA aplicado em todas as camadas lineares (`q_proj`, `k_proj`, `v_proj`, `o_proj`, `gate_proj`, `up_proj`, `down_proj`) com rank 16 e alpha 16
-- Sequências de até 2048 tokens; conteúdo truncado a 2500 chars antes de formatar para garantir que o token de fim nunca seja cortado
-- Salva `generation_config.json` junto ao adaptador em `models/lora-hf/` com `temperature=0.6`, `top_p=0.95`, `top_k=20`, `min_p=0.0`, `repetition_penalty=1.0`, `max_new_tokens=2048` — lido automaticamente pelo Transformers e pelo LM Studio
+- Calcula automaticamente o número de steps com base em `TRAIN_EPOCHS` e o tamanho do dataset — `TRAIN_ITERS` funciona como hard cap
+- LoRA aplicado em todas as camadas lineares (`q_proj`, `k_proj`, `v_proj`, `o_proj`, `gate_proj`, `up_proj`, `down_proj`) com rank 16 e alpha 32
+- Sequências de até 1280 tokens; conteúdo truncado a 2500 chars antes de formatar para garantir que o token de fim nunca seja cortado
+- Salva `generation_config.json` junto ao adaptador em `models/lora-hf/` com `temperature=0.6`, `top_p=0.95`, `top_k=20`, `min_p=0.05`, `repetition_penalty=1.0`, `max_new_tokens=2048` — lido automaticamente pelo Transformers e pelo LM Studio
 
 | Ambiente | Modo | Memória usada |
 |---|---|---|
@@ -307,7 +307,7 @@ Remove tudo: dataset, adapters, modelos fundidos, GGUF base e cache HuggingFace.
 
 ## Persona e escopo do modelo
 
-O modelo é treinado com uma **persona de suporte Anota AI** que segue três regras de comportamento:
+O modelo é treinado com uma **persona de suporte** que segue três regras de comportamento:
 
 1. **Pergunta coberta → responde diretamente** com o conteúdo disponível.
 2. **Pergunta vaga ou incompleta → sugere por similaridade**: identifica o tema mais próximo e inicia com "Pode ser relacionado a [tema]." antes de responder.
@@ -315,9 +315,11 @@ O modelo é treinado com uma **persona de suporte Anota AI** que segue três reg
 
 Isso é garantido por três mecanismos combinados:
 
-1. **System prompt ancorado na Anota AI** (`prompts/prompts.yaml`): instrui o modelo a responder apenas sobre funcionalidades da plataforma Anota AI documentadas na central de ajuda (anota.ai/ajuda).
-2. **Âncora de origem por artigo**: cada entrada positiva inclui a URL real do artigo (`[anota.ai/ajuda: URL]`) no bloco system — o modelo aprende a associar seu conhecimento a conteúdos concretos da Anota AI. Exemplos negativos não têm âncora, reforçando o contraste de escopo.
+1. **System prompt genérico** (`prompts/prompts.yaml`): instrui o modelo a responder apenas com base no conteúdo disponível na sua base de conhecimento, sem conhecimento externo.
+2. **Âncora de origem por artigo**: cada entrada positiva inclui a URL real do artigo (`[site/ajuda: URL]`) no bloco system — o modelo aprende a associar seu conhecimento a conteúdos concretos do help center. Exemplos negativos não têm âncora, reforçando o contraste de escopo.
 3. **Exemplos negativos no dataset**: ~206 perguntas em 15 categorias (off-topic geral + adjacentes de suporte), cada uma pareada com uma resposta de recusa variada no idioma correto.
+
+O Qwen3.5 usa **thinking mode nativo** na inferência — o modelo raciocina em um bloco `<think>` antes de responder. Isso é ativado via `--chat-template-kwargs '{"enable_thinking":true}'` no `make run` e via chat template no LM Studio.
 
 Para ajustar o comportamento, edite `prompts/prompts.yaml` (persona e regras de escopo), `src/services/formatter.py` (variantes de pergunta e âncora de origem) e `src/services/negative_generator.py` (banco de perguntas e frases de recusa).
 
@@ -330,4 +332,4 @@ Para ajustar o comportamento, edite `prompts/prompts.yaml` (persona e regras de 
 - **Por que todas as camadas lineares?** Conhecimento factual é codificado nas camadas MLP (`gate_proj`, `up_proj`, `down_proj`). Treinar apenas atenção (`q_proj`, `v_proj`) ensina formato e comportamento, mas não memoriza conteúdo — o modelo segue as regras do system prompt mas não sabe responder perguntas específicas da base de conhecimento.
 - **Merge vs. adaptador:** `make export` gera dois artefatos — o `adapter.gguf` (~50 MB) para uso local com `make run`, e o `merged-q4km.gguf` (~1.5 GB) para uso standalone no LM Studio ou distribuição. O modelo fundido não precisa do adaptador para rodar.
 - **Cache HuggingFace:** o modelo de treino (~4 GB) fica em `~/.cache/huggingface/`. Para liberar disco: `huggingface-cli delete-cache`.
-- **Parâmetros de inferência:** `temperature=0.6`, `top_p=0.95`, `top_k=20`, `min_p=0.0`, `repeat_penalty=1.0`. Definidos em dois pontos independentes: `generation_config.json` (Transformers/LM Studio safetensors) e flags do `llama-cli`/`make run`. Runtimes que ignoram o `generation_config.json` (ex.: LM Studio carregando GGUF diretamente) precisam configurar manualmente.
+- **Parâmetros de inferência:** `temperature=0.6`, `top_p=0.95`, `top_k=20`, `min_p=0.05`, `repeat_penalty=1.0`. Definidos em dois pontos independentes: `generation_config.json` (Transformers/LM Studio safetensors) e flags do `llama-cli`/`make run`. Runtimes que ignoram o `generation_config.json` (ex.: LM Studio carregando GGUF diretamente) precisam configurar manualmente.

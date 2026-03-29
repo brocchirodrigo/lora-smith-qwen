@@ -11,6 +11,8 @@ from src.config.settings import Settings
 _IM_START = "<|im_start|>"
 _IM_END   = "<|im_end|>"
 _EOS      = "<|endoftext|>"
+_THINK_OPEN = "<think>\n"
+_THINK_CLOSE = "\n</think>\n\n"
 
 # ─── Banco de perguntas off-topic ─────────────────────────────────────────────
 
@@ -286,6 +288,23 @@ _ADJACENT_EN = [
 
 _ALL_OFF_TOPIC = _OFF_TOPIC_PT + _OFF_TOPIC_EN + _ADJACENT_PT + _ADJACENT_EN
 
+# ─── Templates de raciocínio para recusa ────────────��────────────────────────
+
+_THINK_NEGATIVE_PT = [
+    "O usuário pergunta sobre algo fora do escopo da base de conhecimento. Não tenho informações sobre isso.",
+    "Essa pergunta não está coberta pelo conteúdo disponível. Devo recusar.",
+    "Verificando a base de conhecimento. Não encontro nada sobre esse tema. Vou recusar.",
+    "O tema não faz parte do conteúdo treinado. Preciso informar que não tenho essa informação.",
+    "Essa dúvida está fora do escopo. Não devo responder com conhecimento externo.",
+]
+
+_THINK_NEGATIVE_EN = [
+    "The user is asking about something outside my knowledge base. I should decline.",
+    "This topic is not covered in the available content. I need to refuse.",
+    "Checking my knowledge base. Nothing found on this subject. I'll decline politely.",
+    "This question is out of scope. I must not use external knowledge to answer.",
+]
+
 # ─── Respostas de recusa variadas ─────────────────────────────────────────────
 
 _REFUSALS_PT = [
@@ -352,6 +371,9 @@ class NegativeExampleGenerator:
         entries = []
         for q in questions:
             refusal = _pick_refusal(q, rng=self._rng)
+            first_word = q.lower().split()[0].rstrip(".,;:?!") if q.split() else ""
+            is_en = first_word in _EN_STARTERS
+            think = self._rng.choice(_THINK_NEGATIVE_EN if is_en else _THINK_NEGATIVE_PT)
             entries.append({
                 "prompt": (
                     f"{_IM_START}system\n"
@@ -359,7 +381,8 @@ class NegativeExampleGenerator:
                     f"{_IM_START}user\n"
                     f"{q}{_IM_END}\n"
                     f"{_IM_START}assistant\n"
+                    f"{_THINK_OPEN}"
                 ),
-                "completion": f"{refusal}{_IM_END}\n{_EOS}",
+                "completion": f"{think}{_THINK_CLOSE}{refusal}{_IM_END}\n{_EOS}",
             })
         return entries

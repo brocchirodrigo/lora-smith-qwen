@@ -90,9 +90,13 @@ def push_to_hub() -> None:
     tokenizer = _T.from_pretrained(str(MERGED_DIR))
 
     api = HfApi()
-    print(f"\n→ Limpando repositório existente: {settings.hf_push_repo}")
+
+    # Recria o repo limpo para garantir que não fiquem arquivos de runs anteriores.
+    # push_to_hub faz upload incremental — sem esta limpeza, generation_config.json
+    # ou outros artefatos antigos podem permanecer e causar comportamento inesperado.
+    print(f"\n→ Recriando repositório limpo: {settings.hf_push_repo}")
     try:
-        api.delete_repo(repo_id=settings.hf_push_repo, token=settings.hf_token, repo_type="model")
+        api.delete_repo(repo_id=settings.hf_push_repo, token=settings.hf_token)
     except Exception:
         pass
     api.create_repo(repo_id=settings.hf_push_repo, token=settings.hf_token, private=False, exist_ok=True)

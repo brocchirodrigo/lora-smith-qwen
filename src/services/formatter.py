@@ -1,3 +1,5 @@
+import random
+
 from src.config.settings import Settings
 from src.domain.models import WPPost
 from src.services.html_cleaner import HTMLCleaner
@@ -5,6 +7,8 @@ from src.services.html_cleaner import HTMLCleaner
 _IM_START = "<|im_start|>"
 _IM_END = "<|im_end|>"
 _EOS = "<|endoftext|>"
+_THINK_OPEN = "<think>\n"
+_THINK_CLOSE = "\n</think>\n\n"
 
 
 def _first_paragraph(text: str) -> str:
@@ -35,80 +39,85 @@ def _first_keyword(title: str) -> str:
     return word.rstrip(_STRIP_CHARS).capitalize()
 
 
+# ─── Templates de raciocínio (thinking) ─────────────────────────────────────
+# Curtos e variados — o modelo aprende a raciocinar sobre o tema antes de responder.
+
+_THINK_POSITIVE = [
+    lambda t: f"O usuário pergunta sobre {t.lower()}. Tenho informações sobre esse tema.",
+    lambda t: f"Essa pergunta é sobre {t.lower()}. Encontro conteúdo relevante na base.",
+    lambda t: f"Tema identificado: {t.lower()}. Há conteúdo disponível para responder.",
+    lambda t: f"A dúvida é sobre {t.lower()}. Consigo responder com o conteúdo da base.",
+    lambda t: f"Pergunta sobre {t.lower()}. Tenho material sobre isso.",
+]
+
+_THINK_VAGUE = [
+    lambda t: f"A pergunta é vaga, mas pode estar relacionada a {t.lower()}. Vou sugerir o tema mais próximo.",
+    lambda t: f"Não ficou claro o que o usuário precisa. O tema mais próximo que encontro é {t.lower()}.",
+    lambda t: f"Pergunta genérica. Pode ter relação com {t.lower()} na base de conhecimento.",
+]
+
+
 _VARIANTS: list[tuple] = [
     # Variante 1: pergunta direta com título em forma de pergunta
-    # (era: título exato → generalização fraca; agora usa "?" para simular pergunta natural)
     (
         lambda t: f"{t}?",
         lambda t, c: c,
+        "positive",
     ),
     # Variante 2: pedido de ajuda direto
     (
         lambda t: f"Preciso de ajuda com {t.lower()}.",
         lambda t, c: c,
+        "positive",
     ),
     # Variante 3: pedido de explicação
     (
         lambda t: f"Me explica sobre {t.lower()}.",
         lambda t, c: c,
+        "positive",
     ),
-    # Variante 4: relato de problema — pergunta específica, resposta direta sem prefixo
-    # (era: "Pode ser relacionado a..." — mas a pergunta não é vaga, então o prefixo era incorreto)
+    # Variante 4: relato de problema
     (
         lambda t: f"Não estou conseguindo {t.lower()}, pode me ajudar?",
         lambda t, c: c,
+        "positive",
     ),
-    # Variante 5: dúvida direta — sem prefixo
-    # (era: "Pode ser relacionado a..." — mesma razão acima)
+    # Variante 5: dúvida direta
     (
         lambda t: f"Tenho uma dúvida sobre {t.lower()}.",
         lambda t, c: c,
+        "positive",
     ),
     # Variante 6: pergunta genuinamente vaga (usa só a 1ª palavra do título como gatilho)
-    # → ensina o modelo a usar "Pode ser relacionado a" apenas quando a pergunta é imprecisa
-    # → resposta usa só o 1º parágrafo: adiciona variação de profundidade (resposta curta)
     (
         lambda t: f"{_first_keyword(t)} não está funcionando, pode ajudar?",
         lambda t, c: f"Pode ser relacionado a {t}.\n\n{_first_paragraph(c)}",
+        "vague",
     ),
 ]
 
 
 class ChatMLFormatter:
     """
-    Formata posts do WordPress no formato ChatML do Qwen3.
+    Formata posts do WordPress no formato ChatML do Qwen3.5 com thinking mode.
 
     Cada artigo gera 6 entradas com variações naturais do título como
     pergunta do usuário:
-      - 5 variantes diretas (v1–v5): resposta é o conteúdo completo, sem prefixo
-      - 1 variante vaga (v6): pergunta usa só a 1ª palavra do título (genuinamente
-        imprecisa), resposta usa "Pode ser relacionado a [título]." + 1º parágrafo
-        — treina tanto o padrão de sugestão quanto respostas curtas
+      - 5 variantes diretas (v1–v5): resposta é o conteúdo completo
+      - 1 variante vaga (v6): pergunta usa só a 1ª palavra do título
 
-    Cada entrada é um dict {"prompt": ..., "completion": ...} para que o
-    SFTTrainer (TRL >= 0.29) aplique label masking nativo via completion_only_loss,
-    computando loss apenas nos tokens da resposta do assistant.
+    O prompt termina com ``<|im_start|>assistant\n<think>\n`` para alinhar
+    com o chat template do Qwen3.5 em ``enable_thinking=true``.
 
-    prompt    = system (com URL de origem do artigo) + user turn
-    completion = resposta + <|im_end|> + <|endoftext|>
-
-    A URL de origem do artigo é injetada no bloco system como âncora de treinamento:
-    o modelo aprende que esse conteúdo pertence à central de ajuda da Anota AI
-    (anota.ai/ajuda). Como completion_only_loss=True, a URL não afeta o que o
-    modelo aprende a gerar — apenas ancora o contexto. Exemplos negativos não
-    possuem essa âncora, reforçando o contraste entre escopo e fora-de-escopo.
-
-    O <|endoftext|> final ensina o modelo que a sequência termina completamente
-    após o turno do assistant. Sem ele, o modelo não aprende a parar.
-
-    O conteúdo é truncado em max_content_chars para garantir que o <|im_end|>
-    final nunca seja cortado pelo max_length do trainer.
+    Cada completion inclui um bloco de raciocínio curto e variado antes da
+    resposta, ensinando o modelo a deliberar sobre o tema antes de responder.
     """
 
-    def __init__(self, settings: Settings) -> None:
+    def __init__(self, settings: Settings, seed: int = 42) -> None:
         self._system_prompt = settings.system_prompt
         self._max_content_chars = settings.max_content_chars
         self._cleaner = HTMLCleaner()
+        self._rng = random.Random(seed)
 
     def _truncate(self, text: str) -> str:
         """Trunca no último parágrafo completo dentro do limite de chars."""
@@ -131,14 +140,18 @@ class ChatMLFormatter:
         if len(content) < 100:
             return None
 
-        # Âncora de origem: URL real do artigo na central de ajuda da Anota AI.
-        # Fica no bloco system (apenas contexto de treinamento, não afeta a saída).
         system_with_origin = f"{self._system_prompt}\n\n[anota.ai/ajuda: {post.link}]"
 
         entries = []
-        for question_fn, answer_fn in _VARIANTS:
+        for question_fn, answer_fn, variant_type in _VARIANTS:
             question = question_fn(title)
             answer = answer_fn(title, content)
+
+            if variant_type == "vague":
+                think = self._rng.choice(_THINK_VAGUE)(title)
+            else:
+                think = self._rng.choice(_THINK_POSITIVE)(title)
+
             entries.append({
                 "prompt": (
                     f"{_IM_START}system\n"
@@ -146,7 +159,8 @@ class ChatMLFormatter:
                     f"{_IM_START}user\n"
                     f"{question}{_IM_END}\n"
                     f"{_IM_START}assistant\n"
+                    f"{_THINK_OPEN}"
                 ),
-                "completion": f"{answer}{_IM_END}\n{_EOS}",
+                "completion": f"{think}{_THINK_CLOSE}{answer}{_IM_END}\n{_EOS}",
             })
         return entries
