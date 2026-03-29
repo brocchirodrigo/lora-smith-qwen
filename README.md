@@ -1,6 +1,6 @@
 # lora-smith-qwen
 
-Pipeline genérico de fine-tuning LoRA para o modelo **Qwen3.5-2B** a partir de artigos de qualquer **help center WordPress**.
+Pipeline genérico de fine-tuning LoRA para o modelo **Qwen3.5-0.8B** a partir de artigos de qualquer **help center WordPress**.
 
 Treino via Python (PEFT/TRL) em qualquer ambiente — CUDA, Apple Silicon ou CPU. Inferência via **llama.cpp** com GGUF, agnóstico de plataforma.
 
@@ -55,7 +55,7 @@ Cada etapa depende da anterior. As etapas 1–3 só precisam ser refeitas se o a
 | Linux CPU | 24 GB RAM | Treino em fp32, lento mas funcional |
 | Docker | 6 GB VRAM (GPU) | Requer Linux + CUDA. MPS não é suportado em container |
 
-> **`make export` (merge):** requer ≥ 6 GB de RAM **disponível** — o modelo 2B em bf16 completo ocupa ~4 GB.
+> **`make export` (merge):** requer ≥ 4 GB de RAM **disponível** — o modelo 0.8B em bf16 completo ocupa ~2 GB.
 
 ### Espaço em disco
 
@@ -141,9 +141,9 @@ cp .env.example .env
 | `WP_USERNAME` | *(vazio)* | Usuário (opcional, API pública) |
 | `WP_APP_PASSWORD` | *(vazio)* | Senha de aplicativo do WordPress |
 | `MAX_POSTS` | `0` (todos) | Limite de posts a extrair |
-| `MODEL_HF_ID` | `Qwen/Qwen3.5-2B` | Modelo HuggingFace para treino |
-| `MODEL_REPO_ID` | `unsloth/Qwen3.5-2B-GGUF` | Repositório do GGUF base |
-| `MODEL_FILENAME` | `Qwen3.5-2B-Q4_K_M.gguf` | Arquivo GGUF local |
+| `MODEL_HF_ID` | `Qwen/Qwen3.5-0.8B` | Modelo HuggingFace para treino |
+| `MODEL_REPO_ID` | `unsloth/Qwen3.5-0.8B-GGUF` | Repositório do GGUF base |
+| `MODEL_FILENAME` | `Qwen3.5-0.8B-Q4_K_M.gguf` | Arquivo GGUF local |
 | `TRAIN_ITERS` | `1000` | Hard cap de steps (0 = sem limite, usa só `TRAIN_EPOCHS`) |
 | `TRAIN_EPOCHS` | `3` | Épocas alvo — steps calculados automaticamente pelo tamanho do dataset |
 | `MAX_CONTENT_CHARS` | `2500` | Limite de chars do conteúdo por entrada (~714 tokens, garante que o token de fim nunca seja truncado) |
@@ -175,7 +175,7 @@ make setup
 make download-base
 ```
 
-- Baixa `Qwen3.5-2B-Q4_K_M.gguf` (~1.5 GB) para `models/base/`
+- Baixa `Qwen3.5-0.8B-Q4_K_M.gguf` (~1.5 GB) para `models/base/`
 - Usado exclusivamente para inferência com `llama-cli`
 
 ### 3. Extração dos dados
@@ -200,7 +200,7 @@ make extract
 make train
 ```
 
-- Baixa `Qwen/Qwen3.5-2B` do HuggingFace (~4 GB, fica em cache após o primeiro uso)
+- Baixa `Qwen/Qwen3.5-0.8B` do HuggingFace (~4 GB, fica em cache após o primeiro uso)
 - Aplica QLoRA 4-bit via `bitsandbytes`
 - Calcula automaticamente o número de steps com base em `TRAIN_EPOCHS` (padrão: 3 épocas) e o tamanho do dataset — `TRAIN_ITERS` funciona como hard cap
 - LoRA aplicado em todas as camadas lineares (`q_proj`, `k_proj`, `v_proj`, `o_proj`, `gate_proj`, `up_proj`, `down_proj`) com rank 16 e alpha 16

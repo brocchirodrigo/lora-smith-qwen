@@ -240,6 +240,16 @@ _ADJACENT_PT = [
     "Qual é a diferença de vocês para o concorrente X?",
     "Vocês têm parceria com outras ferramentas do mercado?",
     "Por que devo escolher vocês em vez de outro sistema?",
+    # Hardware e Ecossistema externo
+    "Como instalo a impressora Bematech b805?",
+    "Como configuro a impressora padrão no Windows?",
+    "Como faço integração com a Nuvemshop?",
+    "Vocês integram com a Shopify?",
+    "Como configuro meu cardápio no iFood?",
+    "Qual maquininha de cartão vocês recomendam, Stone ou PagSeguro?",
+    "Como funciona o sistema da Totvs?",
+    "Como emitir cupom fiscal na Bematech?",
+    "Minha impressora térmica parou de funcionar, o que eu faço?",
 ]
 
 _ADJACENT_EN = [
@@ -350,6 +360,14 @@ class NegativeExampleGenerator:
                     f"{q}{_IM_END}\n"
                     f"{_IM_START}assistant\n"
                 ),
-                "completion": f"{refusal}{_IM_END}\n{_EOS}",
+                "completion": (
+                    f"<think>\n"
+                    f"Avaliando a solicitação do usuário. Tema central: '{q}'.\n"
+                    f"Consultei meu treinamento e tentei localizar o tópico específico indexado com a tag [TUNNING_CONTENT].\n"
+                    f"No entanto, não há dados ou instruções arquivadas sobre este termo preciso usando minha diretriz técnica de conteúdo. \n"
+                    f"A solicitação extravasa as restrições impostas. Devo rejeitá-la e reter qualquer informação extra não homologada.\n"
+                    f"</think>\n"
+                    f"{refusal}{_IM_END}\n{_EOS}"
+                ),
             })
         return entries

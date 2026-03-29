@@ -153,7 +153,7 @@ def main() -> None:
         per_device_eval_batch_size=1,
         eval_accumulation_steps=1,
         gradient_accumulation_steps=grad_accum,
-        learning_rate=2e-5,
+        learning_rate=1e-4,
         lr_scheduler_type="cosine",
         warmup_steps=warmup_steps,
         logging_steps=10,
@@ -169,7 +169,7 @@ def main() -> None:
         eval_strategy="steps" if valid_dataset else "no",
         eval_steps=eval_steps if valid_dataset else None,
         completion_only_loss=True,
-        max_length=1024,
+        max_length=2048,
         packing=False,
     )
 

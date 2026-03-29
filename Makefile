@@ -29,9 +29,9 @@ CPU_THREADS       ?= 6
 TRAIN_EPOCHS      ?= 3
 TRAIN_ITERS       ?= 1000
 MAX_CONTENT_CHARS ?= 2500
-MODEL_HF_ID       ?= Qwen/Qwen3.5-2B
-MODEL_REPO_ID     ?= unsloth/Qwen3.5-2B-GGUF
-MODEL_FILENAME    ?= Qwen3.5-2B-Q4_K_M.gguf
+MODEL_HF_ID       ?= Qwen/Qwen3.5-0.8B
+MODEL_REPO_ID     ?= unsloth/Qwen3.5-0.8B-GGUF
+MODEL_FILENAME    ?= Qwen3.5-0.8B-Q4_K_M.gguf
 
 MODEL_MERGED      := models/merged
 MODEL_MERGED_F16  := models/merged-f16.gguf
@@ -124,7 +124,7 @@ download-base:
 	@uv run python -c "\
 from huggingface_hub import hf_hub_download; \
 import os; \
-repo = os.environ.get('MODEL_REPO_ID', 'unsloth/Qwen3.5-2B-GGUF'); \
+repo = os.environ.get('MODEL_REPO_ID', 'unsloth/Qwen3.5-0.8B-GGUF'); \
 fname = '$(MODEL_FILENAME)'; \
 hf_hub_download(repo, fname, local_dir='$(MODEL_BASE)'); \
 print('✓ Modelo GGUF salvo em: $(MODEL_GGUF)')"

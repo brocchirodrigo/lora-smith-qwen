@@ -1,6 +1,6 @@
 # {ollama_model}
 
-Fine-tuned support assistant based on **Qwen3.5-2B**, trained exclusively on help center articles. Answers questions using only the content from its knowledge base — no general knowledge, no hallucination.
+Fine-tuned support assistant based on **Qwen3.5-0.8B**, trained exclusively on help center articles. Answers questions using only the content from its knowledge base — no general knowledge, no hallucination.
 
 ---
 
@@ -61,7 +61,7 @@ ollama run {ollama_model}
 
 | Detail | Value |
 |---|---|
-| Base model | Qwen/Qwen3.5-2B |
+| Base model | Qwen/Qwen3.5-0.8B |
 | Method | QLoRA 4-bit fine-tuning |
 | LoRA rank | 16 |
 | LoRA alpha | 16 |
