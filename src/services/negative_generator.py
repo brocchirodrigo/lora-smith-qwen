@@ -10,6 +10,7 @@ from src.config.settings import Settings
 
 _IM_START = "<|im_start|>"
 _IM_END   = "<|im_end|>"
+_EOS      = "<|endoftext|>"
 
 # ─── Banco de perguntas off-topic ─────────────────────────────────────────────
 
@@ -259,6 +260,7 @@ class NegativeExampleGenerator:
                 f"{q}{_IM_END}\n"
                 f"{_IM_START}assistant\n"
                 f"{refusal}{_IM_END}\n"
+                f"{_EOS}"
             )
             entries.append(entry)
         return entries

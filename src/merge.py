@@ -49,7 +49,7 @@ def merge_local() -> None:
         low_cpu_mem_usage=True,
         device_map="cpu",
     )
-    tokenizer = AutoTokenizer.from_pretrained(settings.model_hf_id)
+    tokenizer = AutoTokenizer.from_pretrained(str(LORA_HF_DIR))
 
     print(f"→ Carregando adaptador LoRA de {LORA_HF_DIR}")
     model = PeftModel.from_pretrained(model, str(LORA_HF_DIR))
@@ -91,7 +91,7 @@ def push_to_hub() -> None:
     print(f"→ Publicando no Hugging Face Hub: {settings.hf_push_repo}")
     try:
         model.push_to_hub(settings.hf_push_repo, token=settings.hf_token, private=False)
-        tokenizer.push_to_hub(settings.hf_push_repo, token=settings.hf_token, private=True)
+        tokenizer.push_to_hub(settings.hf_push_repo, token=settings.hf_token, private=False)
 
         readme_content = Path("HF_README.md").read_text(encoding="utf-8").format(
             repo_id=settings.hf_push_repo,

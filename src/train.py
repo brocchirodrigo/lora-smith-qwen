@@ -99,6 +99,7 @@ def load_model_and_tokenizer(device: str):
 
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
+        tokenizer.pad_token_id = tokenizer.eos_token_id
 
     return model, tokenizer
 
@@ -115,10 +116,10 @@ def main() -> None:
     model, tokenizer = load_model_and_tokenizer(device)
 
     lora_config = LoraConfig(
-        r=32,
-        lora_alpha=64,
+        r=16,
+        lora_alpha=16,
         target_modules=["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"],
-        lora_dropout=0.05,
+        lora_dropout=0.1,
         bias="none",
         task_type=TaskType.CAUSAL_LM,
     )
@@ -138,18 +139,30 @@ def main() -> None:
     grad_accum = 8
     gc_kwargs = {"use_reentrant": False} if device in ("cuda", "mps") else {}
 
+    # Calcula steps baseado em épocas para evitar overfitting em datasets pequenos.
+    # effective_batch = per_device(1) * grad_accum(8) = 8 amostras por step.
+    effective_batch = grad_accum
+    steps_per_epoch = max(1, len(train_dataset) // effective_batch)
+    target_steps = settings.train_epochs * steps_per_epoch
+    max_steps = min(target_steps, settings.train_iters) if settings.train_iters > 0 else target_steps
+    warmup_steps = max(10, max_steps // 10)
+    eval_steps = max(10, max_steps // 10)
+    save_steps = eval_steps
+    print(f"  Dataset: {len(train_dataset)} | Steps/época: {steps_per_epoch} | "
+          f"Épocas alvo: {settings.train_epochs} | Total steps: {max_steps}")
+
     training_args = SFTConfig(
         output_dir=str(LORA_HF_DIR),
-        max_steps=settings.train_iters,
+        max_steps=max_steps,
         per_device_train_batch_size=1,
         per_device_eval_batch_size=1,
         eval_accumulation_steps=1,
         gradient_accumulation_steps=grad_accum,
-        learning_rate=1e-4,
+        learning_rate=2e-5,
         lr_scheduler_type="cosine",
-        warmup_steps=25,
+        warmup_steps=warmup_steps,
         logging_steps=10,
-        save_steps=100,
+        save_steps=save_steps,
         save_total_limit=2,
         gradient_checkpointing=True,
         gradient_checkpointing_kwargs=gc_kwargs,
@@ -159,7 +172,7 @@ def main() -> None:
         dataloader_pin_memory=(device == "cuda"),
         dataloader_num_workers=0,
         eval_strategy="steps" if valid_dataset else "no",
-        eval_steps=100 if valid_dataset else None,
+        eval_steps=eval_steps if valid_dataset else None,
         dataset_text_field="text",
         max_length=1024,
         packing=False,
@@ -178,7 +191,7 @@ def main() -> None:
     total = sum(p.numel() for p in trainer.model.parameters())
     print(f"  Parâmetros treináveis: {trainable:,} / {total:,} ({100*trainable/total:.2f}%)")
 
-    print(f"\n→ Iniciando fine-tuning ({settings.train_iters} steps)...")
+    print(f"\n→ Iniciando fine-tuning ({max_steps} steps)...")
     trainer.train()
 
     print(f"\n→ Salvando adaptador LoRA em {LORA_HF_DIR}...")

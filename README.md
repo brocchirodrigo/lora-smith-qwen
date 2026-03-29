@@ -96,6 +96,8 @@ lora-smith-qwen/
 ├── docker-compose.yml         # Compose com volumes para modelos e dados
 ├── Makefile                   # Orquestrador do pipeline (local e Docker)
 ├── pyproject.toml
+├── HF_README.md               # README publicado no Hugging Face Hub (make push-hf)
+├── OLLAMA_README.md           # README para a página do modelo no ollama.com
 ├── prompts/
 │   └── prompts.yaml           # System prompt com persona cooperativa
 ├── data/
@@ -142,7 +144,9 @@ cp .env.example .env
 | `MODEL_HF_ID` | `Qwen/Qwen3.5-2B` | Modelo HuggingFace para treino |
 | `MODEL_REPO_ID` | `unsloth/Qwen3.5-2B-GGUF` | Repositório do GGUF base |
 | `MODEL_FILENAME` | `Qwen3.5-2B-Q4_K_M.gguf` | Arquivo GGUF local |
-| `TRAIN_ITERS` | `1000` | Iterações de treino |
+| `TRAIN_ITERS` | `1000` | Hard cap de steps (0 = sem limite, usa só `TRAIN_EPOCHS`) |
+| `TRAIN_EPOCHS` | `3` | Épocas alvo — steps calculados automaticamente pelo tamanho do dataset |
+| `MAX_CONTENT_CHARS` | `2500` | Limite de chars do conteúdo por entrada (~714 tokens, garante que o token de fim nunca seja truncado) |
 | `CPU_THREADS` | `6` | Threads para compilação e inferência |
 | `HF_TOKEN` | *(vazio)* | Token HF com permissão de escrita — necessário para `make push` |
 | `HF_PUSH_REPO` | *(vazio)* | Repositório de destino no HF Hub (ex: `seu-usuario/nome-do-modelo`) |
@@ -198,9 +202,9 @@ make train
 
 - Baixa `Qwen/Qwen3.5-2B` do HuggingFace (~4 GB, fica em cache após o primeiro uso)
 - Aplica QLoRA 4-bit via `bitsandbytes`
-- Treina por 1000 iterações com `SFTTrainer`
-- LoRA aplicado em todas as camadas lineares (`q_proj`, `k_proj`, `v_proj`, `o_proj`, `gate_proj`, `up_proj`, `down_proj`) com rank 32 — necessário para memorizar conteúdo factual da base de conhecimento
-- Sequências de até 1024 tokens
+- Calcula automaticamente o número de steps com base em `TRAIN_EPOCHS` (padrão: 3 épocas) e o tamanho do dataset — `TRAIN_ITERS` funciona como hard cap
+- LoRA aplicado em todas as camadas lineares (`q_proj`, `k_proj`, `v_proj`, `o_proj`, `gate_proj`, `up_proj`, `down_proj`) com rank 16 e alpha 16
+- Sequências de até 1024 tokens; conteúdo truncado a 2500 chars antes de formatar para garantir que o token de fim nunca seja cortado
 - Salva o adaptador em `models/lora-hf/`
 
 | Ambiente | Modo | Memória usada |

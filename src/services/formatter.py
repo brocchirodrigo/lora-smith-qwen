@@ -4,6 +4,7 @@ from src.services.html_cleaner import HTMLCleaner
 
 _IM_START = "<|im_start|>"
 _IM_END = "<|im_end|>"
+_EOS = "<|endoftext|>"
 
 _VARIANTS: list[tuple] = [
     (
@@ -46,11 +47,29 @@ class ChatMLFormatter:
         {variante_da_pergunta}<|im_end|>
         <|im_start|>assistant
         {resposta}<|im_end|>
+        <|endoftext|>
+
+    O <|endoftext|> final ensina o modelo que a sequência termina completamente
+    após o turno do assistant. Sem ele, o modelo não aprende a parar.
+
+    O conteúdo é truncado em max_content_chars para garantir que o <|im_end|>
+    final nunca seja cortado pelo max_length do trainer.
     """
 
     def __init__(self, settings: Settings) -> None:
         self._system_prompt = settings.system_prompt
+        self._max_content_chars = settings.max_content_chars
         self._cleaner = HTMLCleaner()
+
+    def _truncate(self, text: str) -> str:
+        """Trunca no último parágrafo completo dentro do limite de chars."""
+        if len(text) <= self._max_content_chars:
+            return text
+        truncated = text[: self._max_content_chars]
+        last_break = truncated.rfind("\n\n")
+        if last_break > self._max_content_chars // 2:
+            return truncated[:last_break].rstrip()
+        return truncated.rstrip()
 
     def format_post(self, post: WPPost) -> list[str] | None:
         """
@@ -58,7 +77,7 @@ class ChatMLFormatter:
         Retorna None se o conteúdo for muito curto para treinar.
         """
         title = self._cleaner.clean(post.title.rendered)
-        content = self._cleaner.clean(post.content.rendered)
+        content = self._truncate(self._cleaner.clean(post.content.rendered))
 
         if len(content) < 100:
             return None
@@ -74,6 +93,7 @@ class ChatMLFormatter:
                 f"{question}{_IM_END}\n"
                 f"{_IM_START}assistant\n"
                 f"{answer}{_IM_END}\n"
+                f"{_EOS}"
             )
             entries.append(entry)
         return entries

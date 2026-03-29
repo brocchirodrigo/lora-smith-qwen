@@ -45,7 +45,9 @@ jobs:
         run: make train
         env:
           CPU_THREADS: ${{ secrets.CPU_THREADS || '2' }}
-          TRAIN_ITERS: ${{ secrets.TRAIN_ITERS || '500' }}
+          TRAIN_EPOCHS: ${{ secrets.TRAIN_EPOCHS || '3' }}
+          TRAIN_ITERS: ${{ secrets.TRAIN_ITERS || '1000' }}
+          MAX_CONTENT_CHARS: ${{ secrets.MAX_CONTENT_CHARS || '2500' }}
           MODEL_HF_ID: ${{ secrets.MODEL_HF_ID }}
           MODEL_REPO_ID: ${{ secrets.MODEL_REPO_ID }}
           MODEL_FILENAME: ${{ secrets.MODEL_FILENAME }}

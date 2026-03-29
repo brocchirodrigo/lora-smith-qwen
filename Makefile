@@ -22,9 +22,11 @@ LLAMA_BIN    := $(LLAMA_DIR)/build/bin
 -include .env
 export
 
-CPU_THREADS   ?= 6
-TRAIN_ITERS   ?= 500
-MODEL_HF_ID   ?= Qwen/Qwen3.5-2B
+CPU_THREADS        ?= 6
+TRAIN_EPOCHS       ?= 3
+TRAIN_ITERS        ?= 1000
+MAX_CONTENT_CHARS  ?= 2500
+MODEL_HF_ID        ?= Qwen/Qwen3.5-2B
 MODEL_REPO_ID ?= unsloth/Qwen3.5-2B-GGUF
 MODEL_FILENAME ?= Qwen3.5-2B-Q4_K_M.gguf
 
@@ -61,7 +63,7 @@ help:
 	@echo "    make setup              Instala dependências Python e compila llama.cpp"
 	@echo "    make download-base      Baixa o modelo GGUF base do Hugging Face"
 	@echo "    make extract            Extrai posts do WordPress e gera JSONL"
-	@echo "    make train              Fine-tuning LoRA via Python (CUDA/MPS/CPU)"
+	@echo "    make train              Fine-tuning LoRA via Python (CUDA/MPS/CPU) — steps auto por TRAIN_EPOCHS"
 	@echo "    make merge              Funde LoRA no modelo base (salva local em models/merged)"
 	@echo "    make export             export-lora + merge + export-merged-gguf"
 	@echo "    make push               Publica safetensors + GGUF no Hugging Face Hub"
@@ -213,7 +215,7 @@ ollama-create: $(MODEL_MERGED_Q4)
 	@if ! command -v ollama >/dev/null 2>&1; then echo "  → ollama não instalado, pulando ollama-create."; exit 0; fi
 	@echo "→ Gerando Modelfile..."
 	@SYS=$$(uv run python -c "import yaml; print(yaml.safe_load(open('prompts/prompts.yaml'))['system'].strip())") && \
-	printf 'FROM ./%s\n\nSYSTEM """%s"""\n\nPARAMETER num_ctx 4096\nPARAMETER temperature 0.7\n' \
+	printf 'FROM ./%s\n\nSYSTEM """%s"""\n\nPARAMETER num_ctx 4096\nPARAMETER temperature 0.7\nPARAMETER stop "<|im_end|>"\nPARAMETER stop "<|im_start|>"\nPARAMETER repeat_penalty 1.15\nPARAMETER repeat_last_n 64\n' \
 		"$(MODEL_MERGED_Q4)" "$$SYS" > Modelfile
 	@echo "→ Registrando modelo no Ollama local: $(OLLAMA_MODEL)..."
 	@ollama create $(OLLAMA_MODEL) -f Modelfile
@@ -226,6 +228,10 @@ push-ollama:
 	@echo "→ Publicando no Ollama: $(OLLAMA_MODEL)..."
 	@OLLAMA_API_KEY=$(OLLAMA_API_KEY) ollama push $(OLLAMA_MODEL)
 	@echo "✓ Disponível em: https://ollama.com/$(OLLAMA_MODEL)"
+	@echo ""
+	@echo "  ⓘ  Para adicionar o README ao modelo:"
+	@echo "     1. Acesse https://ollama.com/$(OLLAMA_MODEL)/edit"
+	@echo "     2. Cole o conteúdo de OLLAMA_README.md (substitua {ollama_model} por $(OLLAMA_MODEL))"
 
 # ─── Limpeza ──────────────────────────────────────────────────────────────────
 clean:
