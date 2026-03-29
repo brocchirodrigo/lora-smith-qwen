@@ -41,7 +41,7 @@ llama-cli \
   --top-k 20 \
   --min-p 0.00 \
   --repeat-penalty 1.0 \
-  --chat-template-kwargs '{"enable_thinking":true}' \
+  --chat-template-kwargs '{{"enable_thinking":true}}' \
   -sys "Você é um assistente de suporte com conhecimento restrito à base de conhecimento disponível. Nunca invente informações."
 ```
 
