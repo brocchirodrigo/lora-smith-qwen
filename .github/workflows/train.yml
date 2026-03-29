@@ -1,0 +1,57 @@
+name: Train Qwen Local LoRA
+
+on:
+  workflow_dispatch:
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+
+      - name: Install System C++ Toolchain
+        run: sudo apt-get update && sudo apt-get install -y cmake build-essential
+      - name: Run Setup (Build llama-cli & venv)
+        run: make setup
+        env:
+          CPU_THREADS: ${{ secrets.CPU_THREADS || '2' }}
+
+      - name: Download Base GGUF
+        run: make download-base
+        env:
+          MODEL_HF_ID: ${{ secrets.MODEL_HF_ID }}
+          MODEL_REPO_ID: ${{ secrets.MODEL_REPO_ID }}
+          MODEL_FILENAME: ${{ secrets.MODEL_FILENAME }}
+
+      - name: Extract Dataset (e.g. WordPress)
+        run: make extract
+        env:
+          WP_URL: ${{ secrets.WP_URL || '' }}
+          WP_USER: ${{ secrets.WP_USER || '' }}
+          WP_PASS: ${{ secrets.WP_PASS || '' }}
+
+      - name: Train LoRA
+        run: make train
+        env:
+          CPU_THREADS: ${{ secrets.CPU_THREADS || '2' }}
+          TRAIN_ITERS: ${{ secrets.TRAIN_ITERS || '500' }}
+          MODEL_HF_ID: ${{ secrets.MODEL_HF_ID }}
+          MODEL_REPO_ID: ${{ secrets.MODEL_REPO_ID }}
+          MODEL_FILENAME: ${{ secrets.MODEL_FILENAME }}
+
+      - name: Archive Trained LoRA Checkpoints
+        uses: actions/upload-artifact@v4
+        with:
+          name: trained-lora-adapter
+          path: models/lora-hf/
+          retention-days: 7
