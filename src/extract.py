@@ -76,10 +76,10 @@ async def main() -> None:
     valid_entries = all_entries[:n_valid]
     train_entries = all_entries[n_valid:]
 
-    def write_jsonl(path: Path, items: list[str]) -> None:
+    def write_jsonl(path: Path, items: list[dict]) -> None:
         with path.open("w", encoding="utf-8") as f:
-            for text in items:
-                f.write(json.dumps({"text": text}, ensure_ascii=False) + "\n")
+            for record in items:
+                f.write(json.dumps(record, ensure_ascii=False) + "\n")
 
     write_jsonl(TRAIN_FILE, train_entries)
     write_jsonl(VALID_FILE, valid_entries)

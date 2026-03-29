@@ -85,14 +85,12 @@ class ChatMLFormatter:
         imprecisa), resposta usa "Pode ser relacionado a [título]." + 1º parágrafo
         — treina tanto o padrão de sugestão quanto respostas curtas
 
-    Formato de cada entrada:
-        <|im_start|>system
-        {system_prompt}<|im_end|>
-        <|im_start|>user
-        {variante_da_pergunta}<|im_end|>
-        <|im_start|>assistant
-        {resposta}<|im_end|>
-        <|endoftext|>
+    Cada entrada é um dict {"prompt": ..., "completion": ...} para que o
+    SFTTrainer (TRL >= 0.29) aplique label masking nativo via completion_only_loss,
+    computando loss apenas nos tokens da resposta do assistant.
+
+    prompt    = system + user turn (até <|im_start|>assistant\\n inclusive)
+    completion = resposta + <|im_end|> + <|endoftext|>
 
     O <|endoftext|> final ensina o modelo que a sequência termina completamente
     após o turno do assistant. Sem ele, o modelo não aprende a parar.
@@ -116,9 +114,9 @@ class ChatMLFormatter:
             return truncated[:last_break].rstrip()
         return truncated.rstrip()
 
-    def format_post(self, post: WPPost) -> list[str] | None:
+    def format_post(self, post: WPPost) -> list[dict] | None:
         """
-        Converte um WPPost em múltiplas entradas ChatML.
+        Converte um WPPost em múltiplas entradas no formato prompt/completion.
         Retorna None se o conteúdo for muito curto para treinar.
         """
         title = self._cleaner.clean(post.title.rendered)
@@ -131,14 +129,14 @@ class ChatMLFormatter:
         for question_fn, answer_fn in _VARIANTS:
             question = question_fn(title)
             answer = answer_fn(title, content)
-            entry = (
-                f"{_IM_START}system\n"
-                f"{self._system_prompt}{_IM_END}\n"
-                f"{_IM_START}user\n"
-                f"{question}{_IM_END}\n"
-                f"{_IM_START}assistant\n"
-                f"{answer}{_IM_END}\n"
-                f"{_EOS}"
-            )
-            entries.append(entry)
+            entries.append({
+                "prompt": (
+                    f"{_IM_START}system\n"
+                    f"{self._system_prompt}{_IM_END}\n"
+                    f"{_IM_START}user\n"
+                    f"{question}{_IM_END}\n"
+                    f"{_IM_START}assistant\n"
+                ),
+                "completion": f"{answer}{_IM_END}\n{_EOS}",
+            })
         return entries

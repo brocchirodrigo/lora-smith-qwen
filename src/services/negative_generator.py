@@ -325,16 +325,15 @@ class NegativeExampleGenerator:
     """
     Gera exemplos de treinamento negativos (off-topic → recusa).
 
-    Cada exemplo segue o mesmo formato ChatML dos exemplos positivos,
-    com o system prompt, uma pergunta fora do escopo e uma resposta
-    de recusa variada.
+    Retorna dicts {"prompt": ..., "completion": ...} alinhados com o formato
+    do ChatMLFormatter para que o SFTTrainer aplique label masking consistente.
     """
 
     def __init__(self, settings: Settings, seed: int = 42) -> None:
         self._system_prompt = settings.system_prompt
         self._rng = random.Random(seed)
 
-    def generate(self, n: int) -> list[str]:
+    def generate(self, n: int) -> list[dict]:
         """
         Retorna n exemplos negativos embaralhados.
         Se n > len(banco), repete o banco com variação de resposta.
@@ -343,14 +342,14 @@ class NegativeExampleGenerator:
         entries = []
         for q in questions:
             refusal = _pick_refusal(q, rng=self._rng)
-            entry = (
-                f"{_IM_START}system\n"
-                f"{self._system_prompt}{_IM_END}\n"
-                f"{_IM_START}user\n"
-                f"{q}{_IM_END}\n"
-                f"{_IM_START}assistant\n"
-                f"{refusal}{_IM_END}\n"
-                f"{_EOS}"
-            )
-            entries.append(entry)
+            entries.append({
+                "prompt": (
+                    f"{_IM_START}system\n"
+                    f"{self._system_prompt}{_IM_END}\n"
+                    f"{_IM_START}user\n"
+                    f"{q}{_IM_END}\n"
+                    f"{_IM_START}assistant\n"
+                ),
+                "completion": f"{refusal}{_IM_END}\n{_EOS}",
+            })
         return entries

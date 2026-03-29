@@ -119,8 +119,8 @@ lora-smith-qwen/
     │   └── wp_client.py       # Cliente WordPress REST API
     ├── services/
     │   ├── html_cleaner.py
-    │   ├── formatter.py       # ChatMLFormatter — 5 variantes por artigo
-    │   └── negative_generator.py  # Exemplos negativos (~140 perguntas off-topic)
+    │   ├── formatter.py       # ChatMLFormatter — 6 variantes por artigo
+    │   └── negative_generator.py  # Exemplos negativos (~206 perguntas off-topic e adjacentes)
     ├── extract.py             # Extração, formatação e mix de exemplos negativos
     ├── train.py               # Fine-tuning LoRA (CUDA/MPS/CPU)
     └── merge.py               # Merge LoRA + base (local e push para HF Hub)
@@ -185,10 +185,10 @@ make extract
 ```
 
 - Consulta a API REST do WordPress e pagina todos os posts publicados
-- Formata cada artigo em **5 variantes ChatML**:
-  - 3 variantes diretas: título exato, "Preciso de ajuda com...", "Me explica sobre..."
-  - 2 variantes vagas: "Não estou conseguindo...", "Tenho uma dúvida sobre..." — resposta prefixada com "Pode ser relacionado a [título].", treinando a persona cooperativa
-- Gera automaticamente exemplos **negativos** (off-topic → recusa) em ~140 perguntas de 13 categorias, correspondendo a 25% do total de positivos (mínimo 30)
+- Formata cada artigo em **6 variantes** no formato `prompt/completion` para label masking nativo:
+  - 5 variantes diretas: "Título?", "Preciso de ajuda com...", "Me explica sobre...", "Não estou conseguindo...", "Tenho uma dúvida sobre..." — resposta direta sem prefixo
+  - 1 variante vaga: usa só a 1ª palavra do título como gatilho → resposta com "Pode ser relacionado a [título]." + 1º parágrafo, treinando sugestão por similaridade apenas quando a pergunta é imprecisa
+- Gera automaticamente exemplos **negativos** (off-topic e adjacentes → recusa) em ~206 perguntas de 15 categorias, correspondendo a 25% do total de positivos (mínimo 30)
 - Embaralha positivos e negativos antes de dividir
 - Salva em `data/processed/train.jsonl` (90%) e `valid.jsonl` (10%)
 
@@ -337,8 +337,8 @@ O modelo é treinado com uma **persona cooperativa** que segue três regras de c
 Isso é garantido por três mecanismos combinados:
 
 1. **System prompt cooperativo** (`prompts/prompts.yaml`): define as três regras de comportamento e instrui o modelo a nunca usar conhecimento externo.
-2. **Variantes de treino por artigo**: cada artigo gera 5 entradas — 3 diretas e 2 vagas com resposta prefixada "Pode ser relacionado a...", ensinando o padrão de sugestão por similaridade ao modelo.
-3. **Exemplos negativos no dataset**: ~140 perguntas off-topic em 13 categorias, cada uma pareada com uma resposta de recusa variada.
+2. **Variantes de treino por artigo**: cada artigo gera 6 entradas — 5 diretas e 1 vaga com resposta prefixada "Pode ser relacionado a...", ensinando o padrão de sugestão apenas quando a pergunta é genuinamente imprecisa.
+3. **Exemplos negativos no dataset**: ~206 perguntas em 15 categorias (off-topic geral + adjacentes de suporte), cada uma pareada com uma resposta de recusa variada no idioma correto.
 
 Para ajustar o comportamento, edite `prompts/prompts.yaml` (persona e regras), `src/services/formatter.py` (variantes de pergunta) e `src/services/negative_generator.py` (banco de perguntas e frases de recusa).
 
