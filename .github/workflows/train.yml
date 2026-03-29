@@ -36,9 +36,10 @@ jobs:
       - name: Extract Dataset (e.g. WordPress)
         run: make extract
         env:
-          WP_URL: ${{ secrets.WP_URL || '' }}
-          WP_USER: ${{ secrets.WP_USER || '' }}
-          WP_PASS: ${{ secrets.WP_PASS || '' }}
+          WP_BASE_URL: ${{ secrets.WP_BASE_URL || '' }}
+          WP_USERNAME: ${{ secrets.WP_USERNAME || '' }}
+          WP_APP_PASSWORD: ${{ secrets.WP_APP_PASSWORD || '' }}
+          MAX_POSTS: ${{ secrets.MAX_POSTS || '0' }}
 
       - name: Train LoRA
         run: make train
