@@ -187,12 +187,14 @@ run: $(MODEL_GGUF) $(MODEL_LORA)
 		--prompt "<|im_start|>assistant\nOlá, como posso te ajudar?<|im_end|>"
 
 # ─── Export GGUF do modelo fundido (para LM Studio) ─────────────────────────
+# Usa bf16 (tipo nativo do merge) para evitar conversão bf16→f16 em memória.
+# Reduz pico de RAM — crítico para Mac com 8 GB de memória unificada.
 export-merged-gguf: $(MODEL_MERGED)/config.json
-	@echo "→ Convertendo modelo fundido para GGUF F16..."
+	@echo "→ Convertendo modelo fundido para GGUF BF16..."
 	@uv run python $(LLAMA_DIR)/convert_hf_to_gguf.py \
 		$(MODEL_MERGED) \
 		--outfile $(MODEL_MERGED_F16) \
-		--outtype f16
+		--outtype bf16
 	@echo "→ Quantizando para Q4_K_M..."
 	@$(LLAMA_BIN)/llama-quantize $(MODEL_MERGED_F16) $(MODEL_MERGED_Q4) Q4_K_M
 	@rm -f $(MODEL_MERGED_F16)
