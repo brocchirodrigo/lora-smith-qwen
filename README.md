@@ -204,7 +204,7 @@ make train
 - Aplica QLoRA 4-bit via `bitsandbytes`
 - Calcula automaticamente o número de steps com base em `TRAIN_EPOCHS` (padrão: 3 épocas) e o tamanho do dataset — `TRAIN_ITERS` funciona como hard cap
 - LoRA aplicado em todas as camadas lineares (`q_proj`, `k_proj`, `v_proj`, `o_proj`, `gate_proj`, `up_proj`, `down_proj`) com rank 16 e alpha 16
-- Sequências de até 1024 tokens; conteúdo truncado a 2500 chars antes de formatar para garantir que o token de fim nunca seja cortado
+- Sequências de até 2048 tokens; conteúdo truncado a 2500 chars antes de formatar para garantir que o token de fim nunca seja cortado
 - Salva o adaptador em `models/lora-hf/`
 
 | Ambiente | Modo | Memória usada |

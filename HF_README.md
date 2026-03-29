@@ -77,7 +77,7 @@ print(tokenizer.decode(outputs[0][inputs["input_ids"].shape[-1]:], skip_special_
 | LoRA alpha | 16 |
 | LoRA dropout | 0.1 |
 | Módulos treinados | `q_proj`, `k_proj`, `v_proj`, `o_proj`, `gate_proj`, `up_proj`, `down_proj` |
-| Comprimento máximo | 1024 tokens |
+| Comprimento máximo | 2048 tokens |
 | Épocas | 3 (steps calculados pelo tamanho do dataset) |
 | Scheduler | Cosine |
 
