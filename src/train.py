@@ -78,15 +78,11 @@ def load_model_and_tokenizer(device: str):
             print("  → Modo: float16 (CUDA, tudo na GPU 0)")
 
     elif device == "mps":
-        from transformers import BitsAndBytesConfig
-        bnb = BitsAndBytesConfig(
-            load_in_4bit=True,
-            bnb_4bit_quant_type="nf4",
-            bnb_4bit_compute_dtype=torch.bfloat16,
-            bnb_4bit_use_double_quant=True,
-        )
-        load_kwargs.update({"quantization_config": bnb, "device_map": {"": "mps"}})
-        print("  → Modo: QLoRA 4-bit (Apple Silicon MPS, conservador para 8 GB)")
+        load_kwargs.update({
+            "torch_dtype": torch.bfloat16,
+            "device_map": {"": "mps"},
+        })
+        print("  → Modo: bfloat16 (Apple Silicon MPS, sem quantização 4-bit)")
 
     else:
         torch.set_num_threads(max(1, settings.cpu_threads - 2))

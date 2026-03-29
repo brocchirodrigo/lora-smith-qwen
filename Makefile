@@ -19,8 +19,11 @@ MODEL_LORA   := models/lora/adapter.gguf
 LLAMA_DIR    := scripts/llama.cpp
 LLAMA_BIN    := $(LLAMA_DIR)/build/bin
 
--include .env
-export
+# Lê .env condicionalmente: previne falhas no CI caso as vars venham direto do shell
+ifneq (,$(wildcard .env))
+  include .env
+  export
+endif
 
 CPU_THREADS       ?= 6
 TRAIN_EPOCHS      ?= 3
@@ -267,11 +270,12 @@ $(MODEL_MERGED_Q4):
 
 # ─── Docker ───────────────────────────────────────────────────────────────────
 DOCKER_IMAGE := lora-smith-qwen
+DOCKER_ENV   := $(if $(wildcard .env),--env-file .env,)
 DOCKER_RUN   := docker run --rm --gpus all \
 	-v $(PWD)/models:/app/models \
 	-v $(PWD)/data:/app/data \
 	-v $(PWD)/prompts:/app/prompts \
-	--env-file .env \
+	$(DOCKER_ENV) \
 	$(DOCKER_IMAGE)
 
 docker-build:
