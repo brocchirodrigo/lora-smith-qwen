@@ -1,8 +1,11 @@
 """
-Teste do modelo fine-tuned via Transformers (carrega do HF Hub).
+Teste completo do modelo fine-tuned via Transformers (carrega do HF Hub).
+
+Executa perguntas positivas, vagas, negativas, adjacentes e multi-idioma,
+exibindo a resposta visível (sem bloco <think>) e um resumo final.
 
 Uso:
-    uv run python scripts/test_model.py
+    uv run python tests/test_model.py
 """
 
 import torch
@@ -13,20 +16,32 @@ from src.config.settings import settings
 REPO_ID = settings.hf_push_repo
 SYSTEM_PROMPT = settings.system_prompt
 
-TEST_QUESTIONS = [
-    # Positivas — devem ser respondidas com conteudo da base
-    "Como configurar a impressora na Anota AI?",
-    "Preciso de ajuda com primeiros passos com a Anota AI.",
-    "Como funciona o atendimento pelo WhatsApp?",
-    # Vagas — devem sugerir tema relacionado
-    "Impressora não está funcionando, pode ajudar?",
-    "Cardápio não está funcionando, pode ajudar?",
-    # Negativas — devem ser recusadas
-    "Qual é a capital da França?",
-    "Como fazer bolo de cenoura?",
-    "Me explica o que é machine learning.",
-    "Como cancelo minha assinatura?",
-    "Quero falar com um atendente.",
+TEST_CASES = [
+    # ── Positivas — devem ser respondidas com conteúdo da base ──
+    ("positiva", "Como configurar a impressora na Anota AI?"),
+    ("positiva", "Preciso de ajuda com primeiros passos com a Anota AI."),
+    ("positiva", "Como funciona o atendimento pelo WhatsApp?"),
+    ("positiva", "Como cadastrar um produto no cardápio?"),
+    ("positiva", "Me explica sobre pagamento online."),
+    # ── Vagas — devem sugerir tema relacionado ──
+    ("vaga", "Impressora não está funcionando, pode ajudar?"),
+    ("vaga", "Cardápio não está funcionando, pode ajudar?"),
+    ("vaga", "Pedido deu problema, o que faço?"),
+    # ── Negativas off-topic — devem recusar ──
+    ("negativa", "Qual é a capital da França?"),
+    ("negativa", "Como fazer bolo de cenoura?"),
+    ("negativa", "Me explica o que é machine learning."),
+    ("negativa", "Quanto é 15% de 200?"),
+    ("negativa", "Who wrote Romeo and Juliet?"),
+    # ── Adjacentes (parecem suporte mas fora do escopo) — devem recusar ──
+    ("adjacente", "Como cancelo minha assinatura?"),
+    ("adjacente", "Quero falar com um atendente."),
+    ("adjacente", "Quanto custa o plano empresarial?"),
+    ("adjacente", "O sistema ficou fora do ar ontem, o que aconteceu?"),
+    ("adjacente", "Vocês integram com a Shopify?"),
+    # ── Multi-idioma — devem recusar em inglês ──
+    ("negativa_en", "What is the best programming language to learn?"),
+    ("negativa_en", "How do I center a div in CSS?"),
 ]
 
 
@@ -40,16 +55,18 @@ def main() -> None:
     tokenizer = AutoTokenizer.from_pretrained(REPO_ID)
     print(f"  Dispositivo: {model.device}")
 
-    # Stop tokens: <|im_end|>, <|endoftext|>, <|im_start|>
     stop_ids = [
         tokenizer.convert_tokens_to_ids("<|im_end|>"),
         tokenizer.convert_tokens_to_ids("<|endoftext|>"),
         tokenizer.convert_tokens_to_ids("<|im_start|>"),
     ]
     eos_token_id = [tid for tid in stop_ids if tid is not None]
-    print(f"  Stop token IDs: {eos_token_id}\n")
+    print(f"  Stop token IDs: {eos_token_id}")
+    print(f"  Total de testes: {len(TEST_CASES)}\n")
 
-    for i, question in enumerate(TEST_QUESTIONS, 1):
+    results = []
+
+    for i, (category, question) in enumerate(TEST_CASES, 1):
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": question},
@@ -74,20 +91,47 @@ def main() -> None:
                 pad_token_id=tokenizer.pad_token_id,
             )
 
-        response = tokenizer.decode(
+        full_response = tokenizer.decode(
             outputs[0][inputs["input_ids"].shape[-1]:],
             skip_special_tokens=True,
         )
 
-        # Remove bloco <think>...</think> para exibir apenas a resposta visivel
-        if "</think>" in response:
-            response = response.split("</think>", 1)[1].strip()
+        # Separa thinking da resposta visível
+        thinking = ""
+        visible = full_response
+        if "</think>" in full_response:
+            parts = full_response.split("</think>", 1)
+            thinking = parts[0].replace("<think>", "").strip()
+            visible = parts[1].strip()
 
-        print(f"{'='*60}")
-        print(f"  [{i}/{len(TEST_QUESTIONS)}] {question}")
-        print(f"{'─'*60}")
-        print(f"  {response[:500]}")
+        results.append({
+            "category": category,
+            "question": question,
+            "thinking": thinking,
+            "visible": visible,
+        })
+
+        print(f"{'='*70}")
+        print(f"  [{i}/{len(TEST_CASES)}] ({category}) {question}")
+        if thinking:
+            print(f"  THINK: {thinking[:120]}")
+        print(f"{'─'*70}")
+        print(f"  {visible[:500]}")
         print()
+
+    # ── Resumo ──
+    print(f"\n{'='*70}")
+    print(f"  RESUMO")
+    print(f"{'='*70}")
+    for cat in ["positiva", "vaga", "negativa", "adjacente", "negativa_en"]:
+        cat_results = [r for r in results if r["category"] == cat]
+        if not cat_results:
+            continue
+        print(f"\n  [{cat.upper()}] ({len(cat_results)} testes)")
+        for r in cat_results:
+            short = r["visible"][:80].replace("\n", " ")
+            print(f"    Q: {r['question'][:50]}")
+            print(f"    R: {short}...")
 
 
 if __name__ == "__main__":
