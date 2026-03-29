@@ -41,7 +41,7 @@ llama-cli \
   --top-k 20 \
   --min-p 0.00 \
   --repeat-penalty 1.0 \
-  --chat-template-kwargs '{{"enable_thinking":true}}' \
+  --chat-template-kwargs '{"enable_thinking":true}' \
   -sys "Você é um assistente de suporte com conhecimento restrito à base de conhecimento disponível. Nunca invente informações."
 ```
 
@@ -59,8 +59,8 @@ model = AutoModelForCausalLM.from_pretrained(
 tokenizer = AutoTokenizer.from_pretrained("{repo_id}")
 
 messages = [
-    {{"role": "system", "content": "Você é um assistente de suporte..."}},
-    {{"role": "user", "content": "Como faço para configurar X?"}},
+    {"role": "system", "content": "Você é um assistente de suporte..."},
+    {"role": "user", "content": "Como faço para configurar X?"},
 ]
 # enable_thinking=True: o template padrão do Qwen3.5 desativa thinking por padrão em modelos pequenos.
 # add_generation_prompt=True prefills <think> no turno do assistant.

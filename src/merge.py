@@ -102,9 +102,10 @@ def push_to_hub() -> None:
         model.push_to_hub(settings.hf_push_repo, token=settings.hf_token, private=False)
         tokenizer.push_to_hub(settings.hf_push_repo, token=settings.hf_token, private=False)
 
-        readme_content = Path("HF_README.md").read_text(encoding="utf-8").format(
-            repo_id=settings.hf_push_repo,
-            base_model=settings.model_hf_id,
+        readme_content = (
+            Path("HF_README.md").read_text(encoding="utf-8")
+            .replace("{repo_id}", settings.hf_push_repo)
+            .replace("{base_model}", settings.model_hf_id)
         )
         api.upload_file(
             path_or_fileobj=readme_content.encode("utf-8"),
