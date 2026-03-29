@@ -6,7 +6,7 @@ _NOISE_PATTERNS = re.compile(
     r"(leia\s+tamb[eé]m[\s:]+.*|artigos?\s+relacionados?[\s:]+.*"
     r"|compartilhe\s+(este|esse)\s+artigo.*|veja\s+tamb[eé]m[\s:]+.*"
     r"|[úu]ltima\s+atualiza[çc][ãa]o[\s:]+.*)",
-    re.IGNORECASE | re.MULTILINE,
+    re.IGNORECASE,
 )
 
 

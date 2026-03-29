@@ -16,6 +16,8 @@ def _first_paragraph(text: str) -> str:
     return text
 
 
+_STRIP_CHARS = ".,;:?!"
+
 _SKIP_WORDS = {"como", "o", "a", "os", "as", "qual", "quais", "quando", "onde",
                "por", "para", "que", "um", "uma", "de", "do", "da", "em",
                "meu", "minha", "meus", "minhas", "seu", "sua", "seus", "suas",
@@ -25,12 +27,12 @@ _SKIP_WORDS = {"como", "o", "a", "os", "as", "qual", "quais", "quando", "onde",
 def _first_keyword(title: str) -> str:
     """Retorna a primeira palavra significativa do título (ignora artigos e pronomes interrogativos)."""
     for word in title.split():
-        w = word.rstrip(".,;:?!").lower()
+        w = word.rstrip(_STRIP_CHARS).lower()
         if w not in _SKIP_WORDS and len(w) >= 3:
-            return word.rstrip(".,;:?!").capitalize()
+            return word.rstrip(_STRIP_CHARS).capitalize()
     # fallback: primeira palavra sem filtro
     word = title.split()[0] if title.split() else title
-    return word.rstrip(".,;:?!").capitalize()
+    return word.rstrip(_STRIP_CHARS).capitalize()
 
 
 _VARIANTS: list[tuple] = [

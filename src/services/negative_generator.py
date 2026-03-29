@@ -299,13 +299,26 @@ _REFUSALS_EN = [
 ]
 
 
-def _pick_refusal(question: str) -> str:
-    """Escolhe uma resposta de recusa no idioma da pergunta (heurística simples)."""
-    q_lower = question.lower()
-    use_pt = any(w in q_lower for w in ["qual", "como", "quem", "quando", "quanto", "me ", "uma ", " em ", " do ", " da "])
+# Primeiras palavras típicas de perguntas em inglês.
+# Detecção por first-word evita falsos positivos de substring (ex: "tem" em "system").
+_EN_STARTERS = {
+    "how", "what", "when", "where", "who", "why", "is", "are", "can",
+    "do", "does", "will", "would", "i", "the", "this", "that", "it",
+    # imperative starters
+    "give", "tell", "write", "show", "find", "explain", "translate",
+    "help", "describe", "list", "make", "create", "get",
+}
 
-    pool = _REFUSALS_PT if use_pt else _REFUSALS_EN
-    return random.choice(pool)
+
+def _pick_refusal(question: str, rng: random.Random | None = None) -> str:
+    """Escolhe uma resposta de recusa no idioma da pergunta.
+
+    Usa a primeira palavra como sinal de idioma: perguntas em inglês quase
+    sempre começam com uma das palavras de _EN_STARTERS; as demais são PT.
+    """
+    first_word = question.lower().split()[0].rstrip(".,;:?!") if question.split() else ""
+    pool = _REFUSALS_EN if first_word in _EN_STARTERS else _REFUSALS_PT
+    return (rng or random).choice(pool)
 
 
 class NegativeExampleGenerator:
@@ -329,7 +342,7 @@ class NegativeExampleGenerator:
         questions = self._rng.choices(_ALL_OFF_TOPIC, k=n)
         entries = []
         for q in questions:
-            refusal = _pick_refusal(q)
+            refusal = _pick_refusal(q, rng=self._rng)
             entry = (
                 f"{_IM_START}system\n"
                 f"{self._system_prompt}{_IM_END}\n"

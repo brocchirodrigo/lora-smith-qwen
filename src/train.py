@@ -16,7 +16,7 @@ import torch
 from datasets import Dataset
 from peft import LoraConfig, TaskType
 from transformers import AutoModelForCausalLM, AutoTokenizer
-from trl import SFTConfig, SFTTrainer
+from trl import DataCollatorForCompletionOnlyLM, SFTConfig, SFTTrainer
 
 from src.config.settings import settings
 
@@ -104,6 +104,19 @@ def load_model_and_tokenizer(device: str):
     return model, tokenizer
 
 
+def make_collator(tokenizer) -> DataCollatorForCompletionOnlyLM:
+    """
+    Cria um data collator que mascara o loss nos tokens de system + user,
+    computando gradiente apenas nos tokens da resposta do assistant.
+
+    Usa IDs tokenizados em vez de string bruta para garantir que o template
+    seja encontrado independentemente do vocabulário do tokenizer.
+    """
+    response_template = "<|im_start|>assistant\n"
+    template_ids = tokenizer.encode(response_template, add_special_tokens=False)
+    return DataCollatorForCompletionOnlyLM(template_ids, tokenizer=tokenizer)
+
+
 # ─── Treinamento ──────────────────────────────────────────────────────────────
 
 def main() -> None:
@@ -114,6 +127,8 @@ def main() -> None:
 
     print("→ Carregando modelo e tokenizer...")
     model, tokenizer = load_model_and_tokenizer(device)
+    collator = make_collator(tokenizer)
+    print("  → Label masking ativo: loss apenas nos tokens do assistant")
 
     lora_config = LoraConfig(
         r=16,
@@ -183,6 +198,7 @@ def main() -> None:
         eval_dataset=valid_dataset,
         processing_class=tokenizer,
         peft_config=lora_config,
+        data_collator=collator,
     )
 
     trainable = sum(p.numel() for p in trainer.model.parameters() if p.requires_grad)
