@@ -66,6 +66,6 @@ ollama run {ollama_model}
 | LoRA rank | 16 |
 | LoRA alpha | 16 |
 | Training epochs | 3 |
-| Max sequence length | 1024 tokens |
+| Max sequence length | 2048 tokens |
 
 Built with [lora-smith-qwen](https://github.com/rodrigobrocchi/lora-smith-qwen).
