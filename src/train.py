@@ -139,8 +139,6 @@ def main() -> None:
     grad_accum = 8
     gc_kwargs = {"use_reentrant": False} if device in ("cuda", "mps") else {}
 
-    # Calcula steps baseado em épocas para evitar overfitting em datasets pequenos.
-    # effective_batch = per_device(1) * grad_accum(8) = 8 amostras por step.
     effective_batch = grad_accum
     steps_per_epoch = max(1, len(train_dataset) // effective_batch)
     target_steps = settings.train_epochs * steps_per_epoch

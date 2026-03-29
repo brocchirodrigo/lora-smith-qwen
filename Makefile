@@ -22,13 +22,13 @@ LLAMA_BIN    := $(LLAMA_DIR)/build/bin
 -include .env
 export
 
-CPU_THREADS        ?= 6
-TRAIN_EPOCHS       ?= 3
-TRAIN_ITERS        ?= 1000
-MAX_CONTENT_CHARS  ?= 2500
-MODEL_HF_ID        ?= Qwen/Qwen3.5-2B
-MODEL_REPO_ID ?= unsloth/Qwen3.5-2B-GGUF
-MODEL_FILENAME ?= Qwen3.5-2B-Q4_K_M.gguf
+CPU_THREADS       ?= 6
+TRAIN_EPOCHS      ?= 3
+TRAIN_ITERS       ?= 1000
+MAX_CONTENT_CHARS ?= 2500
+MODEL_HF_ID       ?= Qwen/Qwen3.5-2B
+MODEL_REPO_ID     ?= unsloth/Qwen3.5-2B-GGUF
+MODEL_FILENAME    ?= Qwen3.5-2B-Q4_K_M.gguf
 
 MODEL_MERGED      := models/merged
 MODEL_MERGED_F16  := models/merged-f16.gguf
