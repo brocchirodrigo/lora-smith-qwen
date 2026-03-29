@@ -188,7 +188,7 @@ export-merged-gguf: $(MODEL_MERGED)/config.json
 		--outfile $(MODEL_MERGED_F16) \
 		--outtype f16
 	@echo "→ Quantizando para Q4_K_M..."
-	@$(LLAMA_DIR)/build/tools/quantize $(MODEL_MERGED_F16) $(MODEL_MERGED_Q4) Q4_K_M
+	@$(LLAMA_BIN)/llama-quantize $(MODEL_MERGED_F16) $(MODEL_MERGED_Q4) Q4_K_M
 	@rm -f $(MODEL_MERGED_F16)
 	@echo "✓ GGUF em: $(MODEL_MERGED_Q4)"
 
