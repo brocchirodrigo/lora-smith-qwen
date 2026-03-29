@@ -38,11 +38,10 @@ MODEL_MERGED_F16  := models/merged-f16.gguf
 MODEL_MERGED_Q4   := models/merged-q4km.gguf
 HF_PUSH_REPO  ?=
 HF_TOKEN      ?=
-OLLAMA_MODEL  ?=
 
 MODEL_GGUF := $(MODEL_BASE)/$(MODEL_FILENAME)
 
-.PHONY: help setup download-base extract train merge export export-lora export-merged-gguf push push-hf push-gguf ollama-create push-ollama run clean all \
+.PHONY: help setup download-base extract train merge export export-lora export-merged-gguf push push-hf push-gguf run clean all \
         docker-build docker-extract docker-train docker-export docker-export-lora docker-push docker-push-hf docker-run
 
 # ─── Pipeline completo ───────────────────────────────────────────────────────
@@ -53,7 +52,6 @@ all:
 	@$(MAKE) --no-print-directory extract
 	@$(MAKE) --no-print-directory train
 	@$(MAKE) --no-print-directory export
-	@$(MAKE) --no-print-directory ollama-create
 	@$(MAKE) --no-print-directory push
 
 # ─── Help ─────────────────────────────────────────────────────────────────────
@@ -72,8 +70,6 @@ help:
 	@echo "    make push               Publica safetensors + GGUF no Hugging Face Hub"
 	@echo "    make push-hf            Apenas safetensors (requer make merge)"
 	@echo "    make push-gguf          Apenas GGUF (requer make export)"
-	@echo "    make ollama-create      Registra modelo no Ollama local (requer make export)"
-	@echo "    make push-ollama        Publica modelo no ollama.com"
 	@echo "    make run                Chat interativo com llama-cli + LoRA GGUF"
 	@echo "    make clean              Remove dados processados e adaptadores"
 	@echo ""
@@ -169,7 +165,6 @@ push-hf: $(MODEL_MERGED)/config.json
 push: $(MODEL_MERGED)/config.json $(MODEL_MERGED_Q4)
 	@$(MAKE) --no-print-directory push-hf
 	@$(MAKE) --no-print-directory push-gguf
-	@$(MAKE) --no-print-directory push-ollama
 
 # ─── Inferência interativa ────────────────────────────────────────────────────
 run: $(MODEL_GGUF) $(MODEL_LORA)
@@ -187,7 +182,6 @@ run: $(MODEL_GGUF) $(MODEL_LORA)
 		--top-k 20 \
 		--min-p 0.00 \
 		--repeat-penalty 1.0 \
-		--chat-template-kwargs '{"enable_thinking":true}' \
 		-sys "$$SYS" \
 		--prompt "<|im_start|>assistant\nOlá, como posso te ajudar?<|im_end|>"
 
@@ -217,28 +211,6 @@ api.upload_file( \
     token='$(HF_TOKEN)', \
 ); \
 print(f'✓ Disponível em: https://huggingface.co/$(HF_PUSH_REPO)/blob/main/{fname}')"
-
-# ─── Ollama ───────────────────────────────────────────────────────────────────
-ollama-create: $(MODEL_MERGED_Q4)
-	@if [ -z "$(OLLAMA_MODEL)" ]; then echo "  → OLLAMA_MODEL não definido, pulando ollama-create."; exit 0; fi
-	@if ! command -v ollama >/dev/null 2>&1; then echo "  → ollama não instalado, pulando ollama-create."; exit 0; fi
-	@echo "→ Gerando Modelfile com thinking mode ativo..."
-	@MODEL_MERGED_Q4="$(MODEL_MERGED_Q4)" uv run python -m src.services.generate_modelfile
-	@echo "→ Registrando modelo no Ollama local: $(OLLAMA_MODEL)..."
-	@ollama create $(OLLAMA_MODEL) -f Modelfile
-	@echo "✓ Pronto. Para testar: ollama run $(OLLAMA_MODEL)"
-
-push-ollama:
-	@if [ -z "$(OLLAMA_MODEL)" ]; then echo "  → OLLAMA_MODEL não definido, pulando push-ollama."; exit 0; fi
-	@if [ -z "$(OLLAMA_API_KEY)" ]; then echo "  → OLLAMA_API_KEY não definida, pulando push-ollama."; exit 0; fi
-	@if ! command -v ollama >/dev/null 2>&1; then echo "  → ollama não instalado, pulando push-ollama."; exit 0; fi
-	@echo "→ Publicando no Ollama: $(OLLAMA_MODEL)..."
-	@OLLAMA_API_KEY=$(OLLAMA_API_KEY) ollama push $(OLLAMA_MODEL)
-	@echo "✓ Disponível em: https://ollama.com/$(OLLAMA_MODEL)"
-	@echo ""
-	@echo "  ⓘ  Para adicionar o README ao modelo:"
-	@echo "     1. Acesse https://ollama.com/$(OLLAMA_MODEL)/edit"
-	@echo "     2. Cole o conteúdo de OLLAMA_README.md (substitua {ollama_model} por $(OLLAMA_MODEL))"
 
 # ─── Limpeza ──────────────────────────────────────────────────────────────────
 clean:

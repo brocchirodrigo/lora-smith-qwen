@@ -89,8 +89,14 @@ class ChatMLFormatter:
     SFTTrainer (TRL >= 0.29) aplique label masking nativo via completion_only_loss,
     computando loss apenas nos tokens da resposta do assistant.
 
-    prompt    = system + user turn (até <|im_start|>assistant\\n inclusive)
+    prompt    = system (com URL de origem do artigo) + user turn
     completion = resposta + <|im_end|> + <|endoftext|>
+
+    A URL de origem do artigo é injetada no bloco system como âncora de treinamento:
+    o modelo aprende que esse conteúdo pertence à central de ajuda da Anota AI
+    (anota.ai/ajuda). Como completion_only_loss=True, a URL não afeta o que o
+    modelo aprende a gerar — apenas ancora o contexto. Exemplos negativos não
+    possuem essa âncora, reforçando o contraste entre escopo e fora-de-escopo.
 
     O <|endoftext|> final ensina o modelo que a sequência termina completamente
     após o turno do assistant. Sem ele, o modelo não aprende a parar.
@@ -125,6 +131,10 @@ class ChatMLFormatter:
         if len(content) < 100:
             return None
 
+        # Âncora de origem: URL real do artigo na central de ajuda da Anota AI.
+        # Fica no bloco system (apenas contexto de treinamento, não afeta a saída).
+        system_with_origin = f"{self._system_prompt}\n\n[anota.ai/ajuda: {post.link}]"
+
         entries = []
         for question_fn, answer_fn in _VARIANTS:
             question = question_fn(title)
@@ -132,18 +142,11 @@ class ChatMLFormatter:
             entries.append({
                 "prompt": (
                     f"{_IM_START}system\n"
-                    f"{self._system_prompt}{_IM_END}\n"
+                    f"{system_with_origin}{_IM_END}\n"
                     f"{_IM_START}user\n"
                     f"{question}{_IM_END}\n"
                     f"{_IM_START}assistant\n"
                 ),
-                "completion": (
-                    f"<think>\n"
-                    f"Avaliando a solicitação do usuário. Tema central identificado e buscado na minha base.\n"
-                    f"Achei informações relevantes sobre a dúvida atreladas à tag [TUNING_CONTENT]. "
-                    f"Vou formular a resposta estritamente usando esse material treinado.\n"
-                    f"</think>\n"
-                    f"{answer}{_IM_END}\n{_EOS}"
-                ),
+                "completion": f"{answer}{_IM_END}\n{_EOS}",
             })
         return entries

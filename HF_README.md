@@ -27,8 +27,6 @@ O modelo responde perguntas usando exclusivamente o conteúdo dos artigos extra�
 
 Baixe o arquivo `merged-q4km.gguf` diretamente pela interface do LM Studio pesquisando por `{repo_id}`.
 
-> **Thinking mode:** o template padrão do Qwen3.5 desativa thinking por padrão. No LM Studio, acesse as configurações do modelo e habilite **"Thinking"** (ou equivalente) manualmente para garantir que os blocos `<think>` sejam gerados.
-
 ### llama-cli (llama.cpp)
 
 ```bash
@@ -41,8 +39,7 @@ llama-cli \
   --top-k 20 \
   --min-p 0.00 \
   --repeat-penalty 1.0 \
-  --chat-template-kwargs '{"enable_thinking":true}' \
-  -sys "Você é um assistente de suporte com conhecimento restrito à base de conhecimento disponível. Nunca invente informações."
+  -sys "Você é um assistente de suporte da Anota AI. Responda apenas perguntas cobertas pelo conteúdo da sua base de conhecimento. Para perguntas fora do escopo, recuse educadamente sem inventar informações."
 ```
 
 ### Transformers (Python)
@@ -59,13 +56,11 @@ model = AutoModelForCausalLM.from_pretrained(
 tokenizer = AutoTokenizer.from_pretrained("{repo_id}")
 
 messages = [
-    {"role": "system", "content": "Você é um assistente de suporte..."},
+    {"role": "system", "content": "Você é um assistente de suporte da Anota AI..."},
     {"role": "user", "content": "Como faço para configurar X?"},
 ]
-# enable_thinking=True: o template padrão do Qwen3.5 desativa thinking por padrão em modelos pequenos.
-# add_generation_prompt=True prefills <think> no turno do assistant.
 # temperature=0.6, top_p=0.95, top_k=20, repetition_penalty=1.0 vêm do generation_config.json.
-text = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True, enable_thinking=True)
+text = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
 inputs = tokenizer(text, return_tensors="pt").to(model.device)
 outputs = model.generate(**inputs, max_new_tokens=2048)
 print(tokenizer.decode(outputs[0][inputs["input_ids"].shape[-1]:], skip_special_tokens=True))

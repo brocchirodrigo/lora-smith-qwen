@@ -14,13 +14,13 @@ Para rodar o pipeline completo de uma vez:
 make all
 ```
 
-Executa em sequência: `clean → setup → download-base → extract → train → export → ollama-create → push`.
+Executa em sequência: `clean → setup → download-base → extract → train → export → push`.
 
 Ou etapa por etapa:
 
 ```bash
 make setup           # 1. instala dependências e compila llama.cpp
-make download-base   # 2. baixa o modelo GGUF base (~1.5 GB)
+make download-base   # 2. baixa o modelo GGUF base (~530 MB)
 make extract         # 3. extrai posts do WordPress e gera o dataset
 make train           # 4. fine-tuning LoRA (CUDA / MPS / CPU)
 make export          # 5. adapter GGUF (llama-cli) + merge local + GGUF fundido (LM Studio)
@@ -97,7 +97,6 @@ lora-smith-qwen/
 ├── Makefile                   # Orquestrador do pipeline (local e Docker)
 ├── pyproject.toml
 ├── HF_README.md               # README publicado no Hugging Face Hub (make push-hf)
-├── OLLAMA_README.md           # README para a página do modelo no ollama.com
 ├── prompts/
 │   └── prompts.yaml           # System prompt com persona cooperativa
 ├── data/
@@ -120,8 +119,7 @@ lora-smith-qwen/
     ├── services/
     │   ├── html_cleaner.py
     │   ├── formatter.py       # ChatMLFormatter — 6 variantes por artigo
-    │   ├── negative_generator.py  # Exemplos negativos (~206 perguntas off-topic e adjacentes)
-    │   └── generate_modelfile.py  # Gera Modelfile do Ollama (thinking mode + parâmetros Unsloth)
+    │   └── negative_generator.py  # Exemplos negativos (~206 perguntas off-topic e adjacentes)
     ├── extract.py             # Extração, formatação e mix de exemplos negativos
     ├── train.py               # Fine-tuning LoRA (CUDA/MPS/CPU)
     └── merge.py               # Merge LoRA + base (local e push para HF Hub)
@@ -151,8 +149,6 @@ cp .env.example .env
 | `CPU_THREADS` | `6` | Threads para compilação e inferência |
 | `HF_TOKEN` | *(vazio)* | Token HF com permissão de escrita — necessário para `make push` |
 | `HF_PUSH_REPO` | *(vazio)* | Repositório de destino no HF Hub (ex: `seu-usuario/nome-do-modelo`) |
-| `OLLAMA_MODEL` | *(vazio)* | Opcional — nome do modelo no Ollama (ex: `usuario/nome`). Se vazio, etapas ollama são puladas |
-| `OLLAMA_API_KEY` | *(vazio)* | API key para push no Ollama — [ollama.com/settings/api-keys](https://ollama.com/settings/api-keys). Se vazio, `push-ollama` é pulado |
 
 O system prompt e a persona do modelo ficam em `prompts/prompts.yaml` — edite diretamente sem tocar no `.env`.
 
@@ -176,7 +172,7 @@ make setup
 make download-base
 ```
 
-- Baixa `Qwen3.5-0.8B-Q4_K_M.gguf` (~1.5 GB) para `models/base/`
+- Baixa `Qwen3.5-0.8B-Q4_K_M.gguf` (~530 MB) para `models/base/`
 - Usado exclusivamente para inferência com `llama-cli`
 
 ### 3. Extração dos dados
@@ -189,6 +185,7 @@ make extract
 - Formata cada artigo em **6 variantes** no formato `prompt/completion` para label masking nativo:
   - 5 variantes diretas: "Título?", "Preciso de ajuda com...", "Me explica sobre...", "Não estou conseguindo...", "Tenho uma dúvida sobre..." — resposta direta sem prefixo
   - 1 variante vaga: usa só a 1ª palavra do título como gatilho → resposta com "Pode ser relacionado a [título]." + 1º parágrafo, treinando sugestão por similaridade apenas quando a pergunta é imprecisa
+- Cada entrada positiva inclui a **URL de origem do artigo** (`post.link`) no bloco system como âncora de treinamento (`[anota.ai/ajuda: URL]`). Como o loss é calculado apenas na completion, a URL não afeta a saída — ela ancora o modelo no domínio real da Anota AI durante o treino. Exemplos negativos não possuem essa âncora, reforçando o contraste entre escopo e fora-de-escopo.
 - Gera automaticamente exemplos **negativos** (off-topic e adjacentes → recusa) em ~206 perguntas de 15 categorias, correspondendo a 40% do total de positivos (mínimo 40)
 - Embaralha positivos e negativos antes de dividir
 - Salva em `data/processed/train.jsonl` (90%) e `valid.jsonl` (10%)
@@ -206,7 +203,6 @@ make train
 - Calcula automaticamente o número de steps com base em `TRAIN_EPOCHS` (padrão: 3 épocas) e o tamanho do dataset — `TRAIN_ITERS` funciona como hard cap
 - LoRA aplicado em todas as camadas lineares (`q_proj`, `k_proj`, `v_proj`, `o_proj`, `gate_proj`, `up_proj`, `down_proj`) com rank 16 e alpha 16
 - Sequências de até 2048 tokens; conteúdo truncado a 2500 chars antes de formatar para garantir que o token de fim nunca seja cortado
-- Define o **chat template** do tokenizer com thinking mode sempre ativo: `add_generation_prompt=True` injeta `<|im_start|>assistant\n<think>\n` como prefill, propagado para o GGUF via llama.cpp
 - Salva `generation_config.json` junto ao adaptador em `models/lora-hf/` com `temperature=0.6`, `top_p=0.95`, `top_k=20`, `min_p=0.0`, `repetition_penalty=1.0`, `max_new_tokens=2048` — lido automaticamente pelo Transformers e pelo LM Studio
 
 | Ambiente | Modo | Memória usada |
@@ -245,11 +241,10 @@ make run
 make push
 ```
 
-Publica em todos os destinos configurados em sequência:
+Publica em sequência:
 
 1. **HF Hub safetensors** — requer `HF_TOKEN` + `HF_PUSH_REPO`
 2. **HF Hub GGUF** — mesmo repositório, arquivo `merged-q4km.gguf`
-3. **Ollama** — pulado automaticamente se `OLLAMA_MODEL` ou `OLLAMA_API_KEY` estiverem vazios
 
 ```
 seu-usuario/nome-do-modelo/   ← HF Hub
@@ -257,30 +252,12 @@ seu-usuario/nome-do-modelo/   ← HF Hub
 ├── tokenizer.json
 ├── config.json
 └── merged-q4km.gguf
-
-ollama.com/usuario/nome       ← Ollama
 ```
 
-Para publicar destinos individualmente:
+Para publicar individualmente:
 ```bash
 make push-hf        # apenas safetensors no HF (requer make merge)
 make push-gguf      # apenas GGUF no HF (requer make export)
-make ollama-create  # registra localmente no Ollama
-make push-ollama    # publica no ollama.com
-```
-
-### 8. Ollama (opcional)
-
-Requer [ollama instalado](https://ollama.com/download), `OLLAMA_MODEL` e `OLLAMA_API_KEY` definidos no `.env`. Qualquer um ausente faz a etapa ser pulada automaticamente.
-
-```bash
-# .env:
-# OLLAMA_MODEL=usuario/nome-do-modelo
-# OLLAMA_API_KEY=sua-api-key  ← https://ollama.com/settings/api-keys
-
-make ollama-create              # gera Modelfile + registra localmente
-ollama run usuario/nome-do-modelo  # testa local
-make push-ollama                # publica no ollama.com
 ```
 
 ---
@@ -330,19 +307,19 @@ Remove tudo: dataset, adapters, modelos fundidos, GGUF base e cache HuggingFace.
 
 ## Persona e escopo do modelo
 
-O modelo é treinado com uma **persona cooperativa** que segue três regras de comportamento:
+O modelo é treinado com uma **persona de suporte Anota AI** que segue três regras de comportamento:
 
 1. **Pergunta coberta → responde diretamente** com o conteúdo disponível.
-2. **Pergunta vaga ou incompleta → sugere por similaridade**: identifica o tema mais próximo na base de conhecimento e inicia a resposta com "Pode ser relacionado a [tema]." antes de responder.
+2. **Pergunta vaga ou incompleta → sugere por similaridade**: identifica o tema mais próximo e inicia com "Pode ser relacionado a [tema]." antes de responder.
 3. **Pergunta completamente fora do escopo → recusa** com "Não tenho essa informação."
 
 Isso é garantido por três mecanismos combinados:
 
-1. **System prompt cooperativo** (`prompts/prompts.yaml`): define as três regras de comportamento e instrui o modelo a nunca usar conhecimento externo.
-2. **Variantes de treino por artigo**: cada artigo gera 6 entradas — 5 diretas e 1 vaga com resposta prefixada "Pode ser relacionado a...", ensinando o padrão de sugestão apenas quando a pergunta é genuinamente imprecisa.
+1. **System prompt ancorado na Anota AI** (`prompts/prompts.yaml`): instrui o modelo a responder apenas sobre funcionalidades da plataforma Anota AI documentadas na central de ajuda (anota.ai/ajuda).
+2. **Âncora de origem por artigo**: cada entrada positiva inclui a URL real do artigo (`[anota.ai/ajuda: URL]`) no bloco system — o modelo aprende a associar seu conhecimento a conteúdos concretos da Anota AI. Exemplos negativos não têm âncora, reforçando o contraste de escopo.
 3. **Exemplos negativos no dataset**: ~206 perguntas em 15 categorias (off-topic geral + adjacentes de suporte), cada uma pareada com uma resposta de recusa variada no idioma correto.
 
-Para ajustar o comportamento, edite `prompts/prompts.yaml` (persona e regras), `src/services/formatter.py` (variantes de pergunta) e `src/services/negative_generator.py` (banco de perguntas e frases de recusa).
+Para ajustar o comportamento, edite `prompts/prompts.yaml` (persona e regras de escopo), `src/services/formatter.py` (variantes de pergunta e âncora de origem) e `src/services/negative_generator.py` (banco de perguntas e frases de recusa).
 
 ---
 
@@ -353,5 +330,4 @@ Para ajustar o comportamento, edite `prompts/prompts.yaml` (persona e regras), `
 - **Por que todas as camadas lineares?** Conhecimento factual é codificado nas camadas MLP (`gate_proj`, `up_proj`, `down_proj`). Treinar apenas atenção (`q_proj`, `v_proj`) ensina formato e comportamento, mas não memoriza conteúdo — o modelo segue as regras do system prompt mas não sabe responder perguntas específicas da base de conhecimento.
 - **Merge vs. adaptador:** `make export` gera dois artefatos — o `adapter.gguf` (~50 MB) para uso local com `make run`, e o `merged-q4km.gguf` (~1.5 GB) para uso standalone no LM Studio ou distribuição. O modelo fundido não precisa do adaptador para rodar.
 - **Cache HuggingFace:** o modelo de treino (~4 GB) fica em `~/.cache/huggingface/`. Para liberar disco: `huggingface-cli delete-cache`.
-- **Thinking mode:** o template padrão do Qwen3.5 desativa thinking por padrão (`enable_thinking=False`). O pipeline sobrescreve o chat template do tokenizer para sempre prefixar `<think>` no turno do assistant, propagando esse comportamento para o GGUF. Para garantir thinking em qualquer runtime: Transformers → `apply_chat_template(..., enable_thinking=True)`; llama-cli → `--chat-template-kwargs '{"enable_thinking":true}'`; Ollama → coberto pelo TEMPLATE no Modelfile; LM Studio → habilitar "Thinking" manualmente na interface.
-- **Parâmetros de inferência (thinking mode, modelos pequenos):** seguem a recomendação Unsloth para tarefas precisas/factuais — `temperature=0.6`, `top_p=0.95`, `top_k=20`, `min_p=0.0`, `repeat_penalty=1.0` (desabilitado). `repeat_penalty > 1.0` suprime tokens naturalmente repetitivos no raciocínio e deve ser evitado em thinking mode. Definidos em três pontos independentes: `generation_config.json` (Transformers/LM Studio safetensors), Modelfile (Ollama) e flags do `llama-cli`/`make run`. Runtimes que ignoram o `generation_config.json` (ex.: LM Studio carregando GGUF diretamente) precisam configurar manualmente.
+- **Parâmetros de inferência:** `temperature=0.6`, `top_p=0.95`, `top_k=20`, `min_p=0.0`, `repeat_penalty=1.0`. Definidos em dois pontos independentes: `generation_config.json` (Transformers/LM Studio safetensors) e flags do `llama-cli`/`make run`. Runtimes que ignoram o `generation_config.json` (ex.: LM Studio carregando GGUF diretamente) precisam configurar manualmente.

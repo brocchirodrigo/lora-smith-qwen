@@ -360,14 +360,6 @@ class NegativeExampleGenerator:
                     f"{q}{_IM_END}\n"
                     f"{_IM_START}assistant\n"
                 ),
-                "completion": (
-                    f"<think>\n"
-                    f"Avaliando a solicitação do usuário. Tema central: '{q}'.\n"
-                    f"Consultei meu treinamento e tentei localizar o tópico específico indexado com a tag [TUNING_CONTENT].\n"
-                    f"No entanto, não há dados ou instruções arquivadas sobre este termo preciso usando minha diretriz técnica de conteúdo. \n"
-                    f"A solicitação extravasa as restrições impostas. Devo rejeitá-la e reter qualquer informação extra não homologada.\n"
-                    f"</think>\n"
-                    f"{refusal}{_IM_END}\n{_EOS}"
-                ),
+                "completion": f"{refusal}{_IM_END}\n{_EOS}",
             })
         return entries
