@@ -186,7 +186,7 @@ make extract
   - 5 variantes diretas: "Título?", "Preciso de ajuda com...", "Me explica sobre...", "Não estou conseguindo...", "Tenho uma dúvida sobre..." — resposta direta sem prefixo
   - 1 variante vaga: usa só a 1ª palavra do título como gatilho → resposta com "Pode ser relacionado a [título]." + 1º parágrafo, treinando sugestão por similaridade apenas quando a pergunta é imprecisa
 - Cada entrada positiva inclui a **URL de origem do artigo** (`post.link`) no bloco system como âncora de treinamento (`[anota.ai/ajuda: URL]`). Como o loss é calculado apenas na completion, a URL não afeta a saída — ela ancora o modelo no domínio real da Anota AI durante o treino. Exemplos negativos não possuem essa âncora, reforçando o contraste entre escopo e fora-de-escopo.
-- Gera automaticamente exemplos **negativos** (off-topic e adjacentes → recusa) em ~206 perguntas de 15 categorias, correspondendo a 40% do total de positivos (mínimo 40)
+- Gera automaticamente exemplos **negativos** (off-topic e adjacentes → recusa) em ~206 perguntas de 15 categorias, correspondendo a 60% do total de positivos (mínimo 40)
 - Embaralha positivos e negativos antes de dividir
 - Salva em `data/processed/train.jsonl` (90%) e `valid.jsonl` (10%)
 
@@ -201,7 +201,7 @@ make train
 - Baixa `Qwen/Qwen3.5-0.8B` do HuggingFace (~4 GB, fica em cache após o primeiro uso)
 - Aplica QLoRA 4-bit via `bitsandbytes` (CUDA) ou bfloat16 sem quantização (MPS/CPU)
 - Calcula automaticamente o número de steps com base em `TRAIN_EPOCHS` e o tamanho do dataset — `TRAIN_ITERS` funciona como hard cap
-- LoRA aplicado em todas as camadas lineares (`q_proj`, `k_proj`, `v_proj`, `o_proj`, `gate_proj`, `up_proj`, `down_proj`) com rank 16 e alpha 32
+- LoRA aplicado em todas as camadas lineares (`q_proj`, `k_proj`, `v_proj`, `o_proj`, `gate_proj`, `up_proj`, `down_proj`) com rank 64 e alpha 128
 - Sequências de até 1280 tokens; conteúdo truncado a 2500 chars antes de formatar para garantir que o token de fim nunca seja cortado
 - Salva `generation_config.json` junto ao adaptador em `models/lora-hf/` com `temperature=0.6`, `top_p=0.95`, `top_k=20`, `min_p=0.05`, `repetition_penalty=1.0`, `max_new_tokens=2048` — lido automaticamente pelo Transformers e pelo LM Studio
 

@@ -79,8 +79,8 @@ print(tokenizer.decode(outputs[0][inputs["input_ids"].shape[-1]:], skip_special_
 |---|---|
 | Modelo base | `{base_model}` |
 | Método | QLoRA 4-bit (bitsandbytes) |
-| LoRA rank | 16 |
-| LoRA alpha | 32 |
+| LoRA rank | 64 |
+| LoRA alpha | 128 |
 | LoRA dropout | 0.05 |
 | Módulos treinados | `q_proj`, `k_proj`, `v_proj`, `o_proj`, `gate_proj`, `up_proj`, `down_proj` |
 | Learning rate | 5e-5 |
