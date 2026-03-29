@@ -182,6 +182,12 @@ run: $(MODEL_GGUF) $(MODEL_LORA)
 		--color on \
 		-c 4096 \
 		-t $(CPU_THREADS) \
+		--temp 0.6 \
+		--top-p 0.95 \
+		--top-k 20 \
+		--min-p 0.00 \
+		--repeat-penalty 1.0 \
+		--chat-template-kwargs '{"enable_thinking":true}' \
 		-sys "$$SYS" \
 		--prompt "<|im_start|>assistant\nOlá, como posso te ajudar?<|im_end|>"
 
@@ -216,10 +222,8 @@ print(f'✓ Disponível em: https://huggingface.co/$(HF_PUSH_REPO)/blob/main/{fn
 ollama-create: $(MODEL_MERGED_Q4)
 	@if [ -z "$(OLLAMA_MODEL)" ]; then echo "  → OLLAMA_MODEL não definido, pulando ollama-create."; exit 0; fi
 	@if ! command -v ollama >/dev/null 2>&1; then echo "  → ollama não instalado, pulando ollama-create."; exit 0; fi
-	@echo "→ Gerando Modelfile..."
-	@SYS=$$(uv run python -c "import yaml; print(yaml.safe_load(open('prompts/prompts.yaml'))['system'].strip())") && \
-	printf 'FROM ./%s\n\nSYSTEM """%s"""\n\nPARAMETER num_ctx 4096\nPARAMETER temperature 0.1\nPARAMETER stop "<|im_end|>"\nPARAMETER stop "<|im_start|>"\nPARAMETER stop "<|endoftext|>"\nPARAMETER repeat_penalty 1.15\nPARAMETER repeat_last_n 128\n' \
-		"$(MODEL_MERGED_Q4)" "$$SYS" > Modelfile
+	@echo "→ Gerando Modelfile com thinking mode ativo..."
+	@MODEL_MERGED_Q4="$(MODEL_MERGED_Q4)" uv run python -m src.services.generate_modelfile
 	@echo "→ Registrando modelo no Ollama local: $(OLLAMA_MODEL)..."
 	@ollama create $(OLLAMA_MODEL) -f Modelfile
 	@echo "✓ Pronto. Para testar: ollama run $(OLLAMA_MODEL)"
@@ -310,5 +314,5 @@ docker-run:
 	@docker run --rm -it --gpus all \
 		-v $(PWD)/models:/app/models \
 		-v $(PWD)/prompts:/app/prompts \
-		--env-file .env \
+		$(DOCKER_ENV) \
 		$(DOCKER_IMAGE) make run

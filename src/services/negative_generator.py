@@ -363,7 +363,7 @@ class NegativeExampleGenerator:
                 "completion": (
                     f"<think>\n"
                     f"Avaliando a solicitação do usuário. Tema central: '{q}'.\n"
-                    f"Consultei meu treinamento e tentei localizar o tópico específico indexado com a tag [TUNNING_CONTENT].\n"
+                    f"Consultei meu treinamento e tentei localizar o tópico específico indexado com a tag [TUNING_CONTENT].\n"
                     f"No entanto, não há dados ou instruções arquivadas sobre este termo preciso usando minha diretriz técnica de conteúdo. \n"
                     f"A solicitação extravasa as restrições impostas. Devo rejeitá-la e reter qualquer informação extra não homologada.\n"
                     f"</think>\n"

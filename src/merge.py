@@ -16,7 +16,7 @@ from pathlib import Path
 import psutil
 import torch
 from peft import PeftModel
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer, GenerationConfig
 
 from src.config.settings import settings
 
@@ -61,6 +61,15 @@ def merge_local() -> None:
     print(f"→ Salvando modelo fundido em {MERGED_DIR}...")
     model.save_pretrained(str(MERGED_DIR))
     tokenizer.save_pretrained(str(MERGED_DIR))
+
+    # Propaga o GenerationConfig do adaptador (temperature=0.6, thinking etc.)
+    # O merge carrega o base model do HF, que traz a generation_config padrão do Qwen3.5.
+    # Sem esta etapa, models/merged/ ficaria com a config do base, não a nossa.
+    gen_cfg_path = LORA_HF_DIR / "generation_config.json"
+    if gen_cfg_path.exists():
+        GenerationConfig.from_pretrained(str(LORA_HF_DIR)).save_pretrained(str(MERGED_DIR))
+        print("  ✓ GenerationConfig (temperature=0.6) copiada para o modelo fundido")
+
     print(f"  ✓ Modelo salvo localmente em {MERGED_DIR}")
 
 

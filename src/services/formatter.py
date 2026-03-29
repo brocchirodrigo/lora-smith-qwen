@@ -140,7 +140,7 @@ class ChatMLFormatter:
                 "completion": (
                     f"<think>\n"
                     f"Avaliando a solicitação do usuário. Tema central identificado e buscado na minha base.\n"
-                    f"Achei informações relevantes sobre a dúvida atreladas à tag [TUNNING_CONTENT]. "
+                    f"Achei informações relevantes sobre a dúvida atreladas à tag [TUNING_CONTENT]. "
                     f"Vou formular a resposta estritamente usando esse material treinado.\n"
                     f"</think>\n"
                     f"{answer}{_IM_END}\n{_EOS}"

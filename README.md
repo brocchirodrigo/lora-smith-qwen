@@ -120,7 +120,8 @@ lora-smith-qwen/
     ├── services/
     │   ├── html_cleaner.py
     │   ├── formatter.py       # ChatMLFormatter — 6 variantes por artigo
-    │   └── negative_generator.py  # Exemplos negativos (~206 perguntas off-topic e adjacentes)
+    │   ├── negative_generator.py  # Exemplos negativos (~206 perguntas off-topic e adjacentes)
+    │   └── generate_modelfile.py  # Gera Modelfile do Ollama (thinking mode + parâmetros Unsloth)
     ├── extract.py             # Extração, formatação e mix de exemplos negativos
     ├── train.py               # Fine-tuning LoRA (CUDA/MPS/CPU)
     └── merge.py               # Merge LoRA + base (local e push para HF Hub)
@@ -201,16 +202,17 @@ make train
 ```
 
 - Baixa `Qwen/Qwen3.5-0.8B` do HuggingFace (~4 GB, fica em cache após o primeiro uso)
-- Aplica QLoRA 4-bit via `bitsandbytes`
+- Aplica QLoRA 4-bit via `bitsandbytes` (CUDA) ou bfloat16 sem quantização (MPS/CPU)
 - Calcula automaticamente o número de steps com base em `TRAIN_EPOCHS` (padrão: 3 épocas) e o tamanho do dataset — `TRAIN_ITERS` funciona como hard cap
 - LoRA aplicado em todas as camadas lineares (`q_proj`, `k_proj`, `v_proj`, `o_proj`, `gate_proj`, `up_proj`, `down_proj`) com rank 16 e alpha 16
 - Sequências de até 2048 tokens; conteúdo truncado a 2500 chars antes de formatar para garantir que o token de fim nunca seja cortado
-- Salva o adaptador em `models/lora-hf/`
+- Define o **chat template** do tokenizer com thinking mode sempre ativo: `add_generation_prompt=True` injeta `<|im_start|>assistant\n<think>\n` como prefill, propagado para o GGUF via llama.cpp
+- Salva `generation_config.json` junto ao adaptador em `models/lora-hf/` com `temperature=0.6`, `top_p=0.95`, `top_k=20`, `min_p=0.0`, `repetition_penalty=1.0`, `max_new_tokens=2048` — lido automaticamente pelo Transformers e pelo LM Studio
 
 | Ambiente | Modo | Memória usada |
 |---|---|---|
 | CUDA | QLoRA 4-bit | ~4–6 GB VRAM |
-| Apple Silicon (MPS) | QLoRA 4-bit | ~5 GB memória unificada |
+| Apple Silicon (MPS) | bfloat16 | ~5 GB memória unificada |
 | CPU | float32 | ~16 GB RAM |
 
 ### 5. Export
@@ -351,3 +353,5 @@ Para ajustar o comportamento, edite `prompts/prompts.yaml` (persona e regras), `
 - **Por que todas as camadas lineares?** Conhecimento factual é codificado nas camadas MLP (`gate_proj`, `up_proj`, `down_proj`). Treinar apenas atenção (`q_proj`, `v_proj`) ensina formato e comportamento, mas não memoriza conteúdo — o modelo segue as regras do system prompt mas não sabe responder perguntas específicas da base de conhecimento.
 - **Merge vs. adaptador:** `make export` gera dois artefatos — o `adapter.gguf` (~50 MB) para uso local com `make run`, e o `merged-q4km.gguf` (~1.5 GB) para uso standalone no LM Studio ou distribuição. O modelo fundido não precisa do adaptador para rodar.
 - **Cache HuggingFace:** o modelo de treino (~4 GB) fica em `~/.cache/huggingface/`. Para liberar disco: `huggingface-cli delete-cache`.
+- **Thinking mode:** o template padrão do Qwen3.5 desativa thinking por padrão (`enable_thinking=False`). O pipeline sobrescreve o chat template do tokenizer para sempre prefixar `<think>` no turno do assistant, propagando esse comportamento para o GGUF. Para garantir thinking em qualquer runtime: Transformers → `apply_chat_template(..., enable_thinking=True)`; llama-cli → `--chat-template-kwargs '{"enable_thinking":true}'`; Ollama → coberto pelo TEMPLATE no Modelfile; LM Studio → habilitar "Thinking" manualmente na interface.
+- **Parâmetros de inferência (thinking mode, modelos pequenos):** seguem a recomendação Unsloth para tarefas precisas/factuais — `temperature=0.6`, `top_p=0.95`, `top_k=20`, `min_p=0.0`, `repeat_penalty=1.0` (desabilitado). `repeat_penalty > 1.0` suprime tokens naturalmente repetitivos no raciocínio e deve ser evitado em thinking mode. Definidos em três pontos independentes: `generation_config.json` (Transformers/LM Studio safetensors), Modelfile (Ollama) e flags do `llama-cli`/`make run`. Runtimes que ignoram o `generation_config.json` (ex.: LM Studio carregando GGUF diretamente) precisam configurar manualmente.

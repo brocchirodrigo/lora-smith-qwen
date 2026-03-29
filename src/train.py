@@ -15,7 +15,7 @@ from pathlib import Path
 import torch
 from datasets import Dataset
 from peft import LoraConfig, TaskType
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer, GenerationConfig
 from trl import SFTConfig, SFTTrainer
 
 from src.config.settings import settings
@@ -96,6 +96,23 @@ def load_model_and_tokenizer(device: str):
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
         tokenizer.pad_token_id = tokenizer.eos_token_id
+
+    # Chat template com thinking mode sempre ativo (prefill <think> no turno do assistant).
+    # Propagado para o GGUF via llama.cpp → funciona no LM Studio e no Ollama.
+    tokenizer.chat_template = (
+        "{% for message in messages %}"
+        "{% if message['role'] == 'system' %}"
+        "<|im_start|>system\n{{ message['content'] }}<|im_end|>\n"
+        "{% elif message['role'] == 'user' %}"
+        "<|im_start|>user\n{{ message['content'] }}<|im_end|>\n"
+        "{% elif message['role'] == 'assistant' %}"
+        "<|im_start|>assistant\n{{ message['content'] }}<|im_end|>\n"
+        "{% endif %}"
+        "{% endfor %}"
+        "{% if add_generation_prompt %}"
+        "<|im_start|>assistant\n<think>\n"
+        "{% endif %}"
+    )
 
     return model, tokenizer
 
@@ -192,6 +209,20 @@ def main() -> None:
     print(f"\n→ Salvando adaptador LoRA em {LORA_HF_DIR}...")
     trainer.save_model(str(LORA_HF_DIR))
     tokenizer.save_pretrained(str(LORA_HF_DIR))
+
+    # generation_config.json — parâmetros Unsloth para thinking mode em modelos pequenos
+    # (tarefas precisas/factuais): temp 0.6, top_p 0.95, top_k 20, min_p 0.0, repeat_penalty 1.0.
+    # repeat_penalty > 1.0 suprime tokens repetitivos naturais do raciocínio (<think>).
+    # Lido pelo Transformers e pelo LM Studio (safetensors).
+    GenerationConfig(
+        temperature=0.6,
+        do_sample=True,
+        top_p=0.95,
+        top_k=20,
+        min_p=0.0,
+        repetition_penalty=1.0,
+        max_new_tokens=2048,
+    ).save_pretrained(str(LORA_HF_DIR))
 
     print(f"\n✓ Adaptador HF salvo em: {LORA_HF_DIR}")
     print("  Próximo passo: make export-lora")

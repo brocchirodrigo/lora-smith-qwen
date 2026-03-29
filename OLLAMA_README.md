@@ -42,9 +42,13 @@ ollama run {ollama_model}
 | Parameter | Value |
 |---|---|
 | Context window | 4096 tokens |
-| Temperature | 0.7 |
-| Repeat penalty | 1.15 |
-| Repeat last n | 128 |
+| Max tokens (output) | 2048 |
+| Temperature | 0.6 |
+| Top-p | 0.95 |
+| Top-k | 20 |
+| Min-p | 0.0 |
+| Repeat penalty | 1.0 (disabled) |
+| Thinking mode | always on (`<think>` prefill) |
 
 ---
 
