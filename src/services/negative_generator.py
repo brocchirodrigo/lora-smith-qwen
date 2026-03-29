@@ -197,7 +197,84 @@ _OFF_TOPIC_EN = [
 ]
 
 
-_ALL_OFF_TOPIC = _OFF_TOPIC_PT + _OFF_TOPIC_EN
+# ─── Perguntas adjacentes — soam como suporte mas estão fora do escopo ────────
+# Esse banco é crítico para evitar scope leak: cobre requests legítimos de suporte
+# que um assistente de base de conhecimento não deve responder (atendimento humano,
+# pricing, incidentes, feature requests, reclamações formais).
+
+_ADJACENT_PT = [
+    # Atendimento humano
+    "Quero falar com um atendente.",
+    "Tem como falar com alguém da equipe de suporte?",
+    "Preciso de atendimento humano urgente.",
+    "Como entro em contato com o suporte por telefone?",
+    "Tem chat ao vivo disponível?",
+    # Feature requests
+    "Podem adicionar a opção de exportar para PDF?",
+    "Quando vai ter integração com o Google Drive?",
+    "Vocês planejam lançar modo escuro?",
+    "Seria possível adicionar notificações por e-mail?",
+    "Quando vai sair a próxima atualização do sistema?",
+    # Incidentes e status
+    "O sistema ficou fora do ar ontem à noite, o que aconteceu?",
+    "Quando vai voltar a funcionar normalmente?",
+    "O app está com lentidão hoje?",
+    "Teve alguma manutenção programada recentemente?",
+    # Billing / assinatura
+    "Como cancelo minha assinatura?",
+    "Quanto custa o plano empresarial?",
+    "Tem desconto para estudantes ou ONGs?",
+    "Como emito nota fiscal da minha assinatura?",
+    "Posso fazer upgrade do meu plano agora?",
+    "Qual é a política de reembolso?",
+    # Dados / incidente grave
+    "Perdi todos os meus dados, o que aconteceu?",
+    "O sistema deletou meu arquivo sem aviso.",
+    "Minha conta foi acessada por outra pessoa.",
+    # Feedback e reclamação
+    "Quero registrar uma reclamação formal.",
+    "Quero fazer uma sugestão de melhoria.",
+    "Tenho um elogio para a equipe de vocês.",
+    "Como envio um feedback oficial?",
+    # Comparação / concorrência
+    "Qual é a diferença de vocês para o concorrente X?",
+    "Vocês têm parceria com outras ferramentas do mercado?",
+    "Por que devo escolher vocês em vez de outro sistema?",
+]
+
+_ADJACENT_EN = [
+    # Human support
+    "I want to talk to a human agent.",
+    "How do I contact support by phone?",
+    "Is there live chat available?",
+    # Feature requests
+    "Can you add PDF export functionality?",
+    "When will Google Drive integration be available?",
+    "Are you planning to release a dark mode?",
+    "When is the next system update coming out?",
+    # Incidents
+    "The system was down last night, what happened?",
+    "When will it be back to normal?",
+    "Is the app running slow today?",
+    # Billing
+    "How do I cancel my subscription?",
+    "What is the enterprise plan pricing?",
+    "Is there a student discount?",
+    "What is your refund policy?",
+    # Data / serious incident
+    "I lost all my data, what happened?",
+    "The app deleted my file without warning.",
+    # Feedback
+    "I want to file a formal complaint.",
+    "I have a suggestion for improvement.",
+    "How do I send official feedback?",
+    # Comparison
+    "How are you different from competitor X?",
+    "Why should I choose you over other systems?",
+]
+
+
+_ALL_OFF_TOPIC = _OFF_TOPIC_PT + _OFF_TOPIC_EN + _ADJACENT_PT + _ADJACENT_EN
 
 # ─── Respostas de recusa variadas ─────────────────────────────────────────────
 

@@ -215,7 +215,7 @@ ollama-create: $(MODEL_MERGED_Q4)
 	@if ! command -v ollama >/dev/null 2>&1; then echo "  → ollama não instalado, pulando ollama-create."; exit 0; fi
 	@echo "→ Gerando Modelfile..."
 	@SYS=$$(uv run python -c "import yaml; print(yaml.safe_load(open('prompts/prompts.yaml'))['system'].strip())") && \
-	printf 'FROM ./%s\n\nSYSTEM """%s"""\n\nPARAMETER num_ctx 4096\nPARAMETER temperature 0.7\nPARAMETER stop "<|im_end|>"\nPARAMETER stop "<|im_start|>"\nPARAMETER repeat_penalty 1.15\nPARAMETER repeat_last_n 64\n' \
+	printf 'FROM ./%s\n\nSYSTEM """%s"""\n\nPARAMETER num_ctx 4096\nPARAMETER temperature 0.7\nPARAMETER stop "<|im_end|>"\nPARAMETER stop "<|im_start|>"\nPARAMETER repeat_penalty 1.15\nPARAMETER repeat_last_n 128\n' \
 		"$(MODEL_MERGED_Q4)" "$$SYS" > Modelfile
 	@echo "→ Registrando modelo no Ollama local: $(OLLAMA_MODEL)..."
 	@ollama create $(OLLAMA_MODEL) -f Modelfile

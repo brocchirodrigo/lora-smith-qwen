@@ -15,9 +15,9 @@ Assistant: Para configurar a impressora, acesse Configurações → Dispositivos
 e clique em "Adicionar impressora"...
 ```
 
-**2. Vague or incomplete question → suggests by similarity**
+**2. Vague or incomplete question → suggests by similarity (brief answer)**
 ```
-User: Não consigo imprimir
+User: Impressora não está funcionando, pode ajudar?
 Assistant: Pode ser relacionado a configuração de impressora.
 
 Para configurar a impressora, acesse Configurações → Dispositivos...
@@ -44,6 +44,7 @@ ollama run {ollama_model}
 | Context window | 4096 tokens |
 | Temperature | 0.7 |
 | Repeat penalty | 1.15 |
+| Repeat last n | 128 |
 
 ---
 

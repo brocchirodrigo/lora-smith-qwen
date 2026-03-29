@@ -6,26 +6,68 @@ _IM_START = "<|im_start|>"
 _IM_END = "<|im_end|>"
 _EOS = "<|endoftext|>"
 
+
+def _first_paragraph(text: str) -> str:
+    """Retorna o primeiro parágrafo não vazio com pelo menos 50 chars."""
+    for para in text.split("\n\n"):
+        para = para.strip()
+        if len(para) >= 50:
+            return para
+    return text
+
+
+_SKIP_WORDS = {"como", "o", "a", "os", "as", "qual", "quais", "quando", "onde",
+               "por", "para", "que", "um", "uma", "de", "do", "da", "em",
+               "meu", "minha", "meus", "minhas", "seu", "sua", "seus", "suas",
+               "fazer", "ver", "usar", "ter", "ser", "está", "não"}
+
+
+def _first_keyword(title: str) -> str:
+    """Retorna a primeira palavra significativa do título (ignora artigos e pronomes interrogativos)."""
+    for word in title.split():
+        w = word.rstrip(".,;:?!").lower()
+        if w not in _SKIP_WORDS and len(w) >= 3:
+            return word.rstrip(".,;:?!").capitalize()
+    # fallback: primeira palavra sem filtro
+    word = title.split()[0] if title.split() else title
+    return word.rstrip(".,;:?!").capitalize()
+
+
 _VARIANTS: list[tuple] = [
+    # Variante 1: pergunta direta com título em forma de pergunta
+    # (era: título exato → generalização fraca; agora usa "?" para simular pergunta natural)
     (
-        lambda t: t,
+        lambda t: f"{t}?",
         lambda t, c: c,
     ),
+    # Variante 2: pedido de ajuda direto
     (
         lambda t: f"Preciso de ajuda com {t.lower()}.",
         lambda t, c: c,
     ),
+    # Variante 3: pedido de explicação
     (
         lambda t: f"Me explica sobre {t.lower()}.",
         lambda t, c: c,
     ),
+    # Variante 4: relato de problema — pergunta específica, resposta direta sem prefixo
+    # (era: "Pode ser relacionado a..." — mas a pergunta não é vaga, então o prefixo era incorreto)
     (
         lambda t: f"Não estou conseguindo {t.lower()}, pode me ajudar?",
-        lambda t, c: f"Pode ser relacionado a {t}.\n\n{c}",
+        lambda t, c: c,
     ),
+    # Variante 5: dúvida direta — sem prefixo
+    # (era: "Pode ser relacionado a..." — mesma razão acima)
     (
         lambda t: f"Tenho uma dúvida sobre {t.lower()}.",
-        lambda t, c: f"Pode ser relacionado a {t}.\n\n{c}",
+        lambda t, c: c,
+    ),
+    # Variante 6: pergunta genuinamente vaga (usa só a 1ª palavra do título como gatilho)
+    # → ensina o modelo a usar "Pode ser relacionado a" apenas quando a pergunta é imprecisa
+    # → resposta usa só o 1º parágrafo: adiciona variação de profundidade (resposta curta)
+    (
+        lambda t: f"{_first_keyword(t)} não está funcionando, pode ajudar?",
+        lambda t, c: f"Pode ser relacionado a {t}.\n\n{_first_paragraph(c)}",
     ),
 ]
 
@@ -34,11 +76,12 @@ class ChatMLFormatter:
     """
     Formata posts do WordPress no formato ChatML do Qwen3.
 
-    Cada artigo gera 5 entradas com variações naturais do título como
+    Cada artigo gera 6 entradas com variações naturais do título como
     pergunta do usuário:
-      - 3 variantes diretas: resposta é o conteúdo puro
-      - 2 variantes vagas: resposta é prefixada com "Pode ser relacionado a [título]."
-        para treinar a persona cooperativa de sugestão por similaridade
+      - 5 variantes diretas (v1–v5): resposta é o conteúdo completo, sem prefixo
+      - 1 variante vaga (v6): pergunta usa só a 1ª palavra do título (genuinamente
+        imprecisa), resposta usa "Pode ser relacionado a [título]." + 1º parágrafo
+        — treina tanto o padrão de sugestão quanto respostas curtas
 
     Formato de cada entrada:
         <|im_start|>system
