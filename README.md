@@ -189,7 +189,7 @@ make extract
 - Formata cada artigo em **6 variantes** no formato `prompt/completion` para label masking nativo:
   - 5 variantes diretas: "Título?", "Preciso de ajuda com...", "Me explica sobre...", "Não estou conseguindo...", "Tenho uma dúvida sobre..." — resposta direta sem prefixo
   - 1 variante vaga: usa só a 1ª palavra do título como gatilho → resposta com "Pode ser relacionado a [título]." + 1º parágrafo, treinando sugestão por similaridade apenas quando a pergunta é imprecisa
-- Gera automaticamente exemplos **negativos** (off-topic e adjacentes → recusa) em ~206 perguntas de 15 categorias, correspondendo a 25% do total de positivos (mínimo 30)
+- Gera automaticamente exemplos **negativos** (off-topic e adjacentes → recusa) em ~206 perguntas de 15 categorias, correspondendo a 40% do total de positivos (mínimo 40)
 - Embaralha positivos e negativos antes de dividir
 - Salva em `data/processed/train.jsonl` (90%) e `valid.jsonl` (10%)
 
