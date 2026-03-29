@@ -119,7 +119,7 @@ lora-smith-qwen/
     ├── services/
     │   ├── html_cleaner.py
     │   ├── formatter.py       # ChatMLFormatter — 6 variantes por artigo
-    │   └── negative_generator.py  # Exemplos negativos (~206 perguntas off-topic e adjacentes)
+    │   └── negative_generator.py  # Exemplos negativos (~215 perguntas off-topic e adjacentes)
     ├── extract.py             # Extração, formatação e mix de exemplos negativos
     ├── train.py               # Fine-tuning LoRA (CUDA/MPS/CPU)
     └── merge.py               # Merge LoRA + base (local e push para HF Hub)
@@ -186,7 +186,7 @@ make extract
   - 5 variantes diretas: "Título?", "Preciso de ajuda com...", "Me explica sobre...", "Não estou conseguindo...", "Tenho uma dúvida sobre..." — resposta direta sem prefixo
   - 1 variante vaga: usa só a 1ª palavra do título como gatilho → resposta com "Pode ser relacionado a [título]." + 1º parágrafo, treinando sugestão por similaridade apenas quando a pergunta é imprecisa
 - Cada entrada positiva inclui a **URL de origem do artigo** (`post.link`) no bloco system como âncora de treinamento (`[anota.ai/ajuda: URL]`). Como o loss é calculado apenas na completion, a URL não afeta a saída — ela ancora o modelo no domínio real da Anota AI durante o treino. Exemplos negativos não possuem essa âncora, reforçando o contraste entre escopo e fora-de-escopo.
-- Gera automaticamente exemplos **negativos** (off-topic e adjacentes → recusa) em ~206 perguntas de 15 categorias, correspondendo a 60% do total de positivos (mínimo 40)
+- Gera automaticamente exemplos **negativos** (off-topic e adjacentes → recusa) em ~215 perguntas de 15 categorias, correspondendo a 60% do total de positivos (mínimo 40)
 - Embaralha positivos e negativos antes de dividir
 - Salva em `data/processed/train.jsonl` (90%) e `valid.jsonl` (10%)
 
@@ -317,7 +317,7 @@ Isso é garantido por três mecanismos combinados:
 
 1. **System prompt genérico** (`prompts/prompts.yaml`): instrui o modelo a responder apenas com base no conteúdo disponível na sua base de conhecimento, sem conhecimento externo.
 2. **Âncora de origem por artigo**: cada entrada positiva inclui a URL real do artigo (`[site/ajuda: URL]`) no bloco system — o modelo aprende a associar seu conhecimento a conteúdos concretos do help center. Exemplos negativos não têm âncora, reforçando o contraste de escopo.
-3. **Exemplos negativos no dataset**: ~206 perguntas em 15 categorias (off-topic geral + adjacentes de suporte), cada uma pareada com uma resposta de recusa variada no idioma correto.
+3. **Exemplos negativos no dataset**: ~215 perguntas em 15 categorias (off-topic geral + adjacentes de suporte), cada uma pareada com uma resposta de recusa variada no idioma correto.
 
 O Qwen3.5 usa **thinking mode nativo** na inferência — o modelo raciocina em um bloco `<think>` antes de responder. Isso é ativado via `--chat-template-kwargs '{"enable_thinking":true}'` no `make run` e via chat template no LM Studio.
 
