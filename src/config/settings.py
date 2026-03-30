@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     model_filename: str = "Qwen3.5-0.8B-Q4_K_M.gguf"
 
     train_iters: int = 1000  # hard cap; 0 = sem limite (usa só train_epochs)
-    train_epochs: int = 3    # épocas alvo — train.py calcula os steps automaticamente
+    train_epochs: int = 20   # épocas alvo — train.py calcula os steps automaticamente
     max_content_chars: int = 2500  # ~714 tokens + ~269 overhead = ~983 total (cabe em 1024)
     cpu_threads: int = 6
 

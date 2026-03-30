@@ -26,7 +26,7 @@ ifneq (,$(wildcard .env))
 endif
 
 CPU_THREADS       ?= 6
-TRAIN_EPOCHS      ?= 3
+TRAIN_EPOCHS      ?= 20
 TRAIN_ITERS       ?= 1000
 MAX_CONTENT_CHARS ?= 2500
 MODEL_HF_ID       ?= Qwen/Qwen3.5-0.8B

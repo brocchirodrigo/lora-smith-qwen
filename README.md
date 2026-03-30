@@ -144,7 +144,7 @@ cp .env.example .env
 | `MODEL_REPO_ID` | `unsloth/Qwen3.5-0.8B-GGUF` | Repositório do GGUF base |
 | `MODEL_FILENAME` | `Qwen3.5-0.8B-Q4_K_M.gguf` | Arquivo GGUF local |
 | `TRAIN_ITERS` | `1000` | Hard cap de steps (0 = sem limite, usa só `TRAIN_EPOCHS`) |
-| `TRAIN_EPOCHS` | `3` | Épocas alvo — steps calculados automaticamente pelo tamanho do dataset |
+| `TRAIN_EPOCHS` | `20` | Épocas alvo — steps calculados automaticamente pelo tamanho do dataset |
 | `MAX_CONTENT_CHARS` | `2500` | Limite de chars do conteúdo por entrada (~714 tokens, garante que o token de fim nunca seja truncado) |
 | `CPU_THREADS` | `6` | Threads para compilação e inferência |
 | `HF_TOKEN` | *(vazio)* | Token HF com permissão de escrita — necessário para `make push` |
