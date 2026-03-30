@@ -88,7 +88,19 @@ _VARIANTS: list[tuple] = [
         lambda t, c: c,
         "positive",
     ),
-    # Variante 6: pergunta genuinamente vaga (usa só a 1ª palavra do título como gatilho)
+    # Variante 6: como funciona
+    (
+        lambda t: f"Como funciona {t.lower()}?",
+        lambda t, c: c,
+        "positive",
+    ),
+    # Variante 7: onde encontro
+    (
+        lambda t: f"Onde encontro informações sobre {t.lower()}?",
+        lambda t, c: c,
+        "positive",
+    ),
+    # Variante 8: pergunta genuinamente vaga (usa só a 1ª palavra do título como gatilho)
     (
         lambda t: f"{_first_keyword(t)} não está funcionando, pode ajudar?",
         lambda t, c: f"Pode ser relacionado a {t}.\n\n{_first_paragraph(c)}",
@@ -101,10 +113,10 @@ class ChatMLFormatter:
     """
     Formata posts do WordPress no formato ChatML do Qwen3.5 com thinking mode.
 
-    Cada artigo gera 6 entradas com variações naturais do título como
+    Cada artigo gera 8 entradas com variações naturais do título como
     pergunta do usuário:
-      - 5 variantes diretas (v1–v5): resposta é o conteúdo completo
-      - 1 variante vaga (v6): pergunta usa só a 1ª palavra do título
+      - 7 variantes diretas (v1–v7): resposta é o conteúdo completo
+      - 1 variante vaga (v8): pergunta usa só a 1ª palavra do título
 
     O prompt termina com ``<|im_start|>assistant\n<think>\n`` para alinhar
     com o chat template do Qwen3.5 em ``enable_thinking=true``.

@@ -118,7 +118,7 @@ lora-smith-qwen/
     │   └── wp_client.py       # Cliente WordPress REST API
     ├── services/
     │   ├── html_cleaner.py
-    │   ├── formatter.py       # ChatMLFormatter — 6 variantes por artigo
+    │   ├── formatter.py       # ChatMLFormatter — 8 variantes por artigo
     │   └── negative_generator.py  # Exemplos negativos (~215 perguntas off-topic e adjacentes)
     ├── extract.py             # Extração, formatação e mix de exemplos negativos
     ├── train.py               # Fine-tuning LoRA (CUDA/MPS/CPU)
@@ -182,11 +182,11 @@ make extract
 ```
 
 - Consulta a API REST do WordPress e pagina todos os posts publicados
-- Formata cada artigo em **6 variantes** no formato `prompt/completion` para label masking nativo:
-  - 5 variantes diretas: "Título?", "Preciso de ajuda com...", "Me explica sobre...", "Não estou conseguindo...", "Tenho uma dúvida sobre..." — resposta direta sem prefixo
+- Formata cada artigo em **8 variantes** no formato `prompt/completion` para label masking nativo:
+  - 7 variantes diretas: "Título?", "Preciso de ajuda com...", "Me explica sobre...", "Não estou conseguindo...", "Tenho uma dúvida sobre...", "Como funciona...?", "Onde encontro informações sobre...?" — resposta direta
   - 1 variante vaga: usa só a 1ª palavra do título como gatilho → resposta com "Pode ser relacionado a [título]." + 1º parágrafo, treinando sugestão por similaridade apenas quando a pergunta é imprecisa
 - Cada entrada positiva inclui a **URL de origem do artigo** (`post.link`) no bloco system como âncora de treinamento (`[anota.ai/ajuda: URL]`). Como o loss é calculado apenas na completion, a URL não afeta a saída — ela ancora o modelo no domínio real da Anota AI durante o treino. Exemplos negativos não possuem essa âncora, reforçando o contraste entre escopo e fora-de-escopo.
-- Gera automaticamente exemplos **negativos** (off-topic e adjacentes → recusa) em ~215 perguntas de 15 categorias, correspondendo a 60% do total de positivos (mínimo 40)
+- Gera automaticamente exemplos **negativos** (off-topic e adjacentes → recusa) em ~215 perguntas de 15 categorias, correspondendo a 50% do total de positivos (mínimo 40)
 - Embaralha positivos e negativos antes de dividir
 - Salva em `data/processed/train.jsonl` (90%) e `valid.jsonl` (10%)
 

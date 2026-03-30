@@ -65,7 +65,7 @@ async def main() -> None:
 
             entries.extend(post_entries)
 
-    n_negatives = max(40, int(len(entries) * 0.60))
+    n_negatives = max(40, int(len(entries) * 0.50))
     negative_entries = neg_generator.generate(n_negatives)
     console.print(f"  Exemplos negativos gerados: [bold yellow]{n_negatives}[/bold yellow]")
 
